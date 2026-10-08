@@ -72,7 +72,12 @@ class OtpService
             'sent_at' => now()->timestamp,
         ], now()->addMinutes(self::TTL_MINUTES));
 
-        Notification::route('mail', $email)->notify(new OtpNotification($purpose, $code, self::TTL_MINUTES));
+        $notification = new OtpNotification($purpose, $code, self::TTL_MINUTES);
+        if (env('QUEUE_OTP', false)) {
+            Notification::route('mail', $email)->notify($notification);
+        } else {
+            Notification::route('mail', $email)->notifyNow($notification);
+        }
     }
 
     private function assertCanSend(?array $pending): void
