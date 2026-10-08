@@ -1,230 +1,419 @@
-# DeskFlow API
+<p align="center">
+  <h1 align="center">DeskFlow - Enterprise Customer Support & Helpdesk Platform</h1>
+  <p align="center">A high-performance Laravel 11 REST API powering an enterprise helpdesk with business-hours SLA clocks, workload-aware routing, finite-state ticket lifecycle, real-time collaboration, and AI triage.</p>
+</p>
 
-Laravel 11 REST API for **DeskFlow Enterprise**, a customer-support and SLA-dispatch platform: tickets, business-hours SLA clocks, workload-aware routing, a finite-state-machine ticket lifecycle, agent collision detection, immutable audit trail, attachments, notifications and an AI assistant.
-
-The React frontend lives in [`../deskflow-frontend`](../deskflow-frontend). Everything here is JSON over HTTP.
-
----
-
-## Contents
-- [Features](#features)
-- [Tech stack](#tech-stack)
-- [Architecture](#architecture)
-- [Requirements](#requirements)
-- [Quick start (local)](#quick-start-local)
-- [Quick start (Docker)](#quick-start-docker)
-- [Configuration](#configuration)
-- [Everyday commands](#everyday-commands)
-- [Testing](#testing)
-- [Project structure](#project-structure)
-- [Security model](#security-model)
-- [Documentation](#documentation)
+<p align="center">
+  <img src="https://img.shields.io/badge/PHP-8.2+-777BB4?style=for-the-badge&logo=php&logoColor=white" />
+  <img src="https://img.shields.io/badge/Laravel-11-FF2D20?style=for-the-badge&logo=laravel&logoColor=white" />
+  <img src="https://img.shields.io/badge/PostgreSQL-4169E1?style=for-the-badge&logo=postgresql&logoColor=white" />
+  <img src="https://img.shields.io/badge/Sanctum-Auth-F05340?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Reverb-WebSockets-F56565?style=for-the-badge" />
+  <img src="https://img.shields.io/badge/Cloudinary-Media-3448C5?style=for-the-badge&logo=cloudinary&logoColor=white" />
+  <img src="https://img.shields.io/badge/Groq-AI-F55036?style=for-the-badge" />
+</p>
 
 ---
 
-## Features
+## Table of Contents
 
-| Area | What it does |
-|---|---|
-| **Accounts** | Self-signup (customers only) with emailed one-time code; sign-in, password reset by code, optional TOTP two-factor with recovery codes; admins invite staff by email (they choose their own password) or create them; deactivate or erase users; change password; list and revoke signed-in devices |
-| **Tickets** | Create, list/filter/search, reply (public or internal note), priority, assignment, tags, watchers, @mentions, merge duplicates, CSV export |
-| **SLA engine** | First-response and resolution targets per plan and priority, counted in each department's **business hours and timezone**, skipping weekends and holidays; clocks pause while waiting on the customer; breach flagging and 15-minute warnings |
-| **Routing** | Auto-assigns to the least-loaded available agent in the department (ratio of active tickets to capacity, round-robin tiebreak); row locks prevent double assignment; leads are alerted when everyone is full |
-| **Lifecycle** | Finite state machine (open, in progress, pending customer, resolved, closed) with role-aware transitions |
-| **Organizations** | Customer companies (domain, SLA plan, active): customers auto-join by email domain; "company admin" customers see and answer their whole company's tickets |
-| **Workflow tools** | Saved views, bulk status/priority/assign, per-department ticket forms (custom fields), no-code automation rules (on create, on customer reply, after N idle hours) |
-| **AI extras** | Triage suggestions (priority/tags, accept or dismiss), upset/urgent flags (work without AI too), duplicate suggestions, meaning-based help search, reply translation (emails, links and numbers masked) |
-| **Integrations** | Slack, Microsoft Teams and signed generic webhooks for new tickets, assignments, status changes, customer replies, SLA warnings/breaches and low ratings; SSRF-safe, encrypted at rest, retried, auto-disabled after repeated failures |
-| **Realtime and push** | Laravel Reverb WebSockets (tiny "changed" pings, re-fetched through the authorised API), browser push, installable PWA |
-| **Collaboration** | Live agent presence/typing warnings, internal notes hidden from customers |
-| **Attachments** | Browser uploads directly to Cloudinary using signed parameters; files are private and served by short-lived links |
-| **Notifications** | In-app bell and email (queued) for replies, assignments, SLA warnings, mentions; customers are asked to rate resolved tickets |
-| **Help center** | Public knowledge base with categories, search (falls back to AI by meaning), "was this helpful?" votes; staff editor with usage analytics and unanswered searches |
-| **AI assistant** | Floating chat widget (guests: help questions only; customers: also their own tickets; staff: ticket figures by role, namely admins the whole app, leads their department, agents only their assigned tickets) and staff "Draft reply" / "Summarize" tools, via Groq (any OpenAI-compatible API works) |
-| **Inbound email** | Customers can reply by email; new emails from known customers open tickets |
-| **Reports** | SLA overview, trends, agent workload, satisfaction per day/agent with low-rating alerts, CSV export, global audit log |
-| **Privacy** | Customers can download their data or erase their account |
-| **Profile** | Everyone can edit their display name and upload a profile photo (direct to Cloudinary, verified server-side); photos appear in conversations |
-| **Branded email** | Every email uses one branded layout with the logo embedded in the message (works offline and in every mail client) |
+- [Overview](#overview)
+- [Feature Set](#feature-set)
+  - [1. Authentication, Sessions & Two-Factor (2FA)](#1-authentication-sessions--two-factor-2fa)
+  - [2. Ticket Lifecycle & Finite State Machine](#2-ticket-lifecycle--finite-state-machine)
+  - [3. Multi-Tier Business-Hours SLA Engine](#3-multi-tier-business-hours-sla-engine)
+  - [4. Workload-Aware Intelligent Routing](#4-workload-aware-intelligent-routing)
+  - [5. Real-Time Collaboration & Collision Detection](#5-real-time-collaboration--collision-detection)
+  - [6. AI Assistant, Triage & Reply Generation](#6-ai-assistant-triage--reply-generation)
+  - [7. Automation Engine & Custom Trigger Rules](#7-automation-engine--custom-trigger-rules)
+  - [8. Multi-Tenant Organizations & Access Control](#8-multi-tenant-organizations--access-control)
+  - [9. Direct-to-Cloudinary Secure Attachments](#9-direct-to-cloudinary-secure-attachments)
+  - [10. Multi-Channel Support & Inbound Email](#10-multi-channel-support--inbound-email)
+  - [11. Knowledge Base & Help Center Management](#11-knowledge-base--help-center-management)
+  - [12. Analytics, CSAT Ratings & Reporting](#12-analytics-csat-ratings--reporting)
+  - [13. Audit Trails, GDPR Compliance & Privacy](#13-audit-trails-gdpr-compliance--privacy)
+- [Tech Stack](#tech-stack)
+- [Architecture & Design Decisions](#architecture--design-decisions)
+- [Project Structure](#project-structure)
+- [Getting Started](#getting-started)
+- [Demo Accounts](#demo-accounts)
+- [Docker Deployment](#docker-deployment)
+- [Environment Variables](#environment-variables)
+- [Available Artisan Commands](#available-artisan-commands)
 
-## Tech stack
+---
 
-PHP 8.2+ (runs on 8.3 in Docker) · Laravel 11 · Laravel Sanctum (bearer tokens) · PostgreSQL (Supabase) or MySQL · cache and queue in the database (Redis optional) · Cloudinary (files) · SMTP (email) · Groq (AI) · PHPUnit.
+## Overview
 
-## Architecture
+**DeskFlow API** is an enterprise-grade RESTful API built on Laravel 11 that provides a multi-role customer service and SLA dispatch infrastructure. It serves both customer-facing support portals and high-volume staff management consoles. 
 
-```
-Controllers (thin, validate + authorize)
-   └─ Services  — SlaCalculatorService, TicketRoutingService, TicketStateMachineService,
-                  TicketCreationService, TicketNotifier, AgentPresenceService, AuditLoggerService,
-                  Ai\AssistantService, Ai\TicketAiService, CloudinaryService, InboundEmailService ...
-        └─ Eloquent models + Policies (TicketPolicy) + Form Requests + API Resources
-Queue (Redis): notifications, SLA warning jobs        Scheduler: sla:check-breaches every minute
-```
+The API delivers precision SLA tracking operating across department business hours, automatic workload routing with row-level locking, finite-state ticket progressions, live agent presence detection, direct Cloudinary media signing, Groq-powered AI capabilities, and immutable audit logs.
 
-Design rules worth knowing:
-- **Authorization lives in code.** Roles via route middleware, ticket access via `TicketPolicy`.
-- **The audit table is append-only.** The model refuses updates and deletes.
-- **The AI never touches account data.** It chooses an *intent*; our code fetches the data, scoped to the signed-in user.
-- **No secrets reach the browser.** File uploads use signatures generated server-side.
+The React single-page frontend lives in [`../deskflow-frontend`](../deskflow-frontend). Everything in this repository communicates as JSON over HTTP with optional WebSocket notifications.
 
-## Requirements
+---
 
-- PHP 8.2+ with `pdo_pgsql` (or `pdo_mysql`), `redis` (phpredis), `mbstring`, `intl`, `bcmath`, `curl`, `zip`
-- Composer 2
-- PostgreSQL 14+ or MySQL 8. Redis is **optional**: by default cache and queue use database tables
-- Node is **not** needed for the API
+## Feature Set
 
-## Quick start (local)
+### 1. Authentication, Sessions & Two-Factor (2FA)
 
-```bash
-cd deskflow-api
-composer install
-cp .env.example .env
-php artisan key:generate
+Comprehensive identity and session management:
 
-# edit .env: database (DB_*), FRONTEND_URL, optional CLOUDINARY_* and GROQ_API_KEY
-
-php artisan migrate
-php artisan db:seed                       # DEMO data only (password123 for every account)
-php artisan serve                         # http://127.0.0.1:8000
-
-# in two more terminals
-php artisan queue:work                    # emails + SLA warning jobs
-php artisan schedule:work                 # flags SLA breaches every minute
-```
-
-Demo accounts created by the seeder (local use only):
-
-| Role | Email | Password |
+| Flow | Mechanism | Description |
 |---|---|---|
-| Admin | `admin@deskflow.com` | `password123` |
-| Lead | `lead@deskflow.com` | `password123` |
-| Agent | `agent.sarah@deskflow.com` | `password123` |
-| Customer | `rahul@acme.com` | `password123` |
+| Self-Registration | Email OTP | Customers verify registration with a 6-digit one-time password delivered by email |
+| Password Reset | Email OTP | Rate-limited OTP verification flow invalidating all active sessions on change |
+| Staff Invites | Signed Token | Admins invite staff via time-limited token links; invitees establish their own credentials |
+| Token Auth | Laravel Sanctum | Bearer personal access tokens stored securely on clients |
+| Two-Factor Auth (2FA) | TOTP (RFC 6238) | Authenticator app enrolment (Google Authenticator, 1Password) with 8 backup recovery codes |
+| Device Management | Session Auditing | List all active sessions and revoke individual devices or revoke other sessions remotely |
+| User Administration | Soft-Disable & Erase | Admins can deactivate accounts, resend invites, or permanently erase user records |
 
-With `MAIL_MAILER=log` (the default) emails, including signup codes, are written to `storage/logs/laravel.log`.
+---
 
-**Create a real admin without seeding:**
-```bash
-php artisan deskflow:create-admin --name="Your Name" --email=you@company.com
+### 2. Ticket Lifecycle & Finite State Machine
+
+Strict state machine enforcing deterministic status transitions across roles:
+
+- **States:** `open`, `in_progress`, `pending_customer`, `resolved`, `closed`
+- **Role Guards:** Customers can only transition their own tickets between `open`, `resolved`, and `closed` (reopen). Staff can transition through `in_progress` and `pending_customer`.
+- **Clock Pausing:** Moving a ticket to `pending_customer` automatically pauses SLA resolution timers.
+- **Bulk Operations:** Staff can perform bulk reassignment, priority updates, and status transitions on up to 50 tickets simultaneously.
+- **Ticket Merging:** Merge duplicate tickets while re-parenting messages, attachments, and preserving historical reference trails.
+
+---
+
+### 3. Multi-Tier Business-Hours SLA Engine
+
+Precision deadline tracking calculated against customized department work schedules:
+
+- **Custom Schedules:** Department-specific working hours (e.g. 09:00–17:00) and timezones.
+- **Holiday Calendars:** Automatically excludes corporate holidays and weekends from SLA countdown clocks.
+- **Plan Tiers:** Configurable first-response and full-resolution targets mapped by priority (`low`, `medium`, `high`, `urgent`) and customer SLA plan.
+- **Breach Management:** Automated minute-by-minute worker checks (`sla:check-breaches`), 15-minute advance breach warnings, and automatic lead notifications.
+
+---
+
+### 4. Workload-Aware Intelligent Routing
+
+Automated ticket assignment distributing tickets evenly to prevent agent burnout:
+
+- **Capacity Scoring:** Evaluates active tickets against agent maximum capacity ratios.
+- **Round-Robin Tiebreak:** Distributes work among tied agents fairly.
+- **Concurrency Protection:** Uses database row locks (`SELECT ... FOR UPDATE`) to guarantee zero duplicate assignments during concurrent ticket bursts.
+- **Lead Escalation:** Automatically alerts department leads when all available agents reach maximum capacity.
+
+---
+
+### 5. Real-Time Collaboration & Collision Detection
+
+Prevents duplicate agent replies and enhances team visibility:
+
+- **Collision Detection:** 15-second agent presence heartbeat alerts colleagues in real-time when another agent is viewing or typing a reply to a ticket.
+- **Private Staff Notes:** Internal notes hidden from customer portals, styled distinctly for staff-only collaboration.
+- **Watchers & Mentions:** Agents can watch tickets for live alerts and mention teammates using `@agent` syntax.
+- **Real-Time Streaming:** Broadcasts lightweight change events via Laravel Reverb over WebSockets to trigger instantaneous client UI re-fetches.
+
+---
+
+### 6. AI Assistant, Triage & Reply Generation
+
+Integrated LLM workflows powered by Groq (compatible with any OpenAI-compatible provider):
+
+- **Smart Triage:** Auto-analyzes incoming tickets to suggest priority and tag classifications.
+- **Draft Reply Assistant:** Generates contextual, empathetic response drafts grounded in previous ticket messages and knowledge base articles.
+- **Ticket Summarization:** Generates instant executive summaries of lengthy ticket histories.
+- **Multilingual Translation:** Translates international customer messages with PII redaction masking emails, URLs, and phone numbers before API dispatch.
+- **Support Chatbot:** Floating widget answering customer questions using published knowledge base articles.
+- **Budget Protection:** Configurable daily token ceilings and usage limits prevent unintended API overages.
+
+---
+
+### 7. Automation Engine & Custom Trigger Rules
+
+Configurable no-code automation engine:
+
+- **Event Triggers:** Fires on `ticket.created`, `customer.replied`, and `ticket.idle_hours`.
+- **Conditional Logic:** Matches against priority, department, channel, tags, and elapsed idle duration.
+- **Automated Actions:** Auto-assigns agents, adds tags, changes priority, sends webhook alerts, or posts automated canned messages.
+- **Run Tracking:** Complete execution logs recording trigger evaluations and action outputs.
+
+---
+
+### 8. Multi-Tenant Organizations & Access Control
+
+B2B corporate support capabilities:
+
+- **Domain Auto-Mapping:** Customers signing up with `@acme.com` automatically attach to the matching corporate Organization.
+- **Company Admins:** Designated customer managers can view, track, and reply to all tickets submitted across their entire company.
+- **Custom SLA Policies:** Organizations can be assigned dedicated enterprise SLA agreements overriding default plans.
+
+---
+
+### 9. Direct-to-Cloudinary Secure Attachments
+
+High-performance, secure media handling without server bottlenecks:
+
+- **Direct Browser Uploads:** The API computes signed parameters (`POST /api/v1/attachments/sign`); the browser uploads binary files directly to Cloudinary.
+- **Zero Server Overhead:** Server bandwidth and memory are preserved by bypassing backend multipart file handling.
+- **Server Verification:** The backend verifies file signatures, mime types, and size limits before linking assets to messages.
+- **Authenticated Access:** Attachments are private and served through temporary signed Cloudinary URLs.
+
+---
+
+### 10. Multi-Channel Support & Inbound Email
+
+Seamless email-to-ticket conversion:
+
+- **Inbound Webhooks:** Webhook listener (`POST /api/v1/webhooks/inbound-email`) processes incoming webhook payloads from Mailgun/Postmark/SendGrid.
+- **Thread Tracking:** Matches message references and `In-Reply-To` headers to append replies to existing tickets.
+- **New Ticket Generation:** Emails from recognized customers automatically spawn new tickets assigned to the default department.
+
+---
+
+### 11. Knowledge Base & Help Center Management
+
+Self-service documentation platform:
+
+- **Public Articles:** Categorized help articles with markdown formatting.
+- **Helpfulness Feedback:** Upvote and downvote tracking ("Was this helpful?") to measure article quality.
+- **Semantic Fallback Search:** Searches article text and falls back to AI semantic matching when standard keywords yield zero results.
+- **Analytics:** Tracks article view counts and identifies unanswered customer search queries.
+
+---
+
+### 12. Analytics, CSAT Ratings & Reporting
+
+Operational visibility and quality metrics:
+
+- **CSAT Surveys:** Automated satisfaction rating requests (1 to 5 stars + comments) on ticket resolution.
+- **Low-Rating Alerts:** Immediate escalation notifications sent to department leads when ratings drop below acceptable thresholds.
+- **Workload Analytics:** Live dashboards displaying agent capacity, resolution times, and open queues.
+- **SLA Performance:** Real-time compliance tracking, breach counts, and first-response compliance rates.
+- **CSV Data Export:** Comprehensive export tooling for tickets, customers, and audit logs.
+
+---
+
+### 13. Audit Trails, GDPR Compliance & Privacy
+
+Enterprise regulatory and privacy compliance:
+
+- **Immutable Audit Trail:** Append-only log recording every status change, assignment, priority adjustment, and administrative action. Updates and deletions are prevented at the model layer.
+- **GDPR Data Portability:** End-user self-service data export (`GET /api/v1/me/export`) packaging all personal data, tickets, and messages.
+- **Right to Erasure:** Complete account erasure service (`DELETE /api/v1/me`) scrubbing personal identity while preserving anonymized ticket records for metrics integrity.
+
+---
+
+## Tech Stack
+
+| Layer | Technologies |
+|---|---|
+| **Framework** | PHP 8.2+ · Laravel 11 |
+| **Authentication** | Laravel Sanctum (Bearer Tokens) · TOTP 2FA |
+| **Database** | PostgreSQL (Supabase session pooler) or MySQL 8 |
+| **Realtime** | Laravel Reverb WebSockets · Laravel Echo protocol |
+| **Storage & Media** | Cloudinary (Signed client-side uploads) |
+| **Mailing** | SMTP (Brevo, Mailgun, Amazon SES) · Branded HTML templates |
+| **AI Integration** | Groq API (Qwen 3.8 / Llama 3) via OpenAI-compatible endpoints |
+| **Testing** | PHPUnit · Pest |
+
+---
+
+## Architecture & Design Decisions
+
+```
+Clients (Web / Mobile / Webhooks)
+        │
+   [Nginx / TLS]
+        │
+  [Laravel 11 Router & Sanctum Auth Middleware]
+        │
+  Controllers (Thin, FormRequest Validation, JSON Responses)
+        │
+  Services (Business Logic Layer)
+   ├─ SlaCalculatorService      ── Business hours & holiday calculator
+   ├─ TicketRoutingService      ── Least-loaded concurrency routing
+   ├─ TicketStateMachineService ── Strict lifecycle transitions
+   ├─ CloudinaryService         ── Secure upload signing & validation
+   ├─ AutomationEngine          ── Rule execution engine
+   └─ AssistantService          ── Groq LLM client & PII redactor
+        │
+  Eloquent Models + Policies (TicketPolicy)
+        │
+  PostgreSQL / MySQL (Database, Queue & Cache Tables)
 ```
 
-## Quick start (Docker)
+1. **Authorization Resides in Code:** Routes are guarded by strict role middleware (`agent`, `lead`, `admin`), while individual ticket actions are enforced by `TicketPolicy`.
+2. **Append-Only Auditing:** The `AuditLog` model rejects database updates and deletes, ensuring compliance trails cannot be tampered with.
+3. **Data Scoping for AI:** The AI client never receives direct database access; it selects an intent, and backend services query the data strictly scoped to the authenticated user.
+4. **Resilient Background Execution:** Critical customer actions like registration OTPs dispatch synchronously with graceful error reporting, ensuring functionality even when background workers are idle.
+
+---
+
+## Project Structure
+
+```
+deskflow-api/
+├── app/
+│   ├── Enums/                 # UserRole, TicketStatus, TicketPriority, SlaPlan
+│   ├── Events/                # TicketCreated, MessageSent, UserPinged
+│   ├── Http/
+│   │   ├── Controllers/Api/V1/ # Clean, versioned REST controllers
+│   │   ├── Middleware/        # EnsureUserHasRole, TrustProxies
+│   │   ├── Requests/          # Form request validation classes
+│   │   └── Resources/         # API resource transformation layer
+│   ├── Models/                # Eloquent models (Ticket, User, Department, etc.)
+│   ├── Notifications/         # Branded transactional notifications & OTP
+│   ├── Policies/              # TicketPolicy and resource authorization
+│   └── Services/              # Core domain services & AI subsystem
+│       ├── Ai/                # AiClient, AssistantService, TicketAiService
+│       ├── SlaCalculatorService.php
+│       ├── TicketRoutingService.php
+│       └── AutomationEngine.php
+├── config/                    # Framework and service configuration (CORS, Sanctum, Reverb)
+├── database/
+│   ├── migrations/            # Complete schema migrations
+│   └── seeders/               # Enterprise demo and test data seeders
+├── routes/
+│   ├── api.php                # V1 REST route definitions
+│   └── channels.php           # Sanctum-authenticated WebSocket broadcast channels
+└── docs/                      # Deployment and infrastructure guides
+```
+
+---
+
+## Getting Started
+
+### Prerequisites
+
+- PHP 8.2 or 8.3 with extensions: `pdo_pgsql` (or `pdo_mysql`), `mbstring`, `intl`, `bcmath`, `curl`, `zip`
+- Composer 2+
+- PostgreSQL 14+ or MySQL 8 (database tables are used for queue and cache by default)
+
+### Local Setup
+
+1. **Clone and enter the directory:**
+   ```bash
+   cd deskflow/deskflow-api
+   ```
+
+2. **Install dependencies:**
+   ```bash
+   composer install
+   ```
+
+3. **Configure environment:**
+   ```bash
+   cp .env.example .env
+   php artisan key:generate
+   ```
+
+4. **Update database and service credentials in `.env`:**
+   ```env
+   DB_CONNECTION=mysql
+   DB_HOST=127.0.0.1
+   DB_DATABASE=deskflow_api
+   DB_USERNAME=root
+   DB_PASSWORD=
+   
+   FRONTEND_URL=http://localhost:5173
+   CORS_ALLOWED_ORIGINS=http://localhost:5173
+   ```
+
+5. **Run migrations and seed demo data:**
+   ```bash
+   php artisan migrate
+   php artisan db:seed
+   ```
+
+6. **Start the local server:**
+   ```bash
+   php artisan serve
+   ```
+   The API will be available at `http://127.0.0.1:8000`.
+
+7. **(Optional) Run background workers and scheduler:**
+   ```bash
+   # Terminal 2 - Queue worker (for background emails & SLA alerts)
+   php artisan queue:work
+
+   # Terminal 3 - Scheduler (evaluates SLA deadlines every minute)
+   php artisan schedule:work
+   ```
+
+---
+
+## Demo Accounts
+
+When seeded with `php artisan db:seed`, the following demo accounts are created (all passwords: `password123`):
+
+| Role | Email | Password | Access Level |
+|---|---|---|---|
+| **Admin** | `admin@deskflow.com` | `password123` | Full system administration, policies, webhooks, audit |
+| **Team Lead** | `lead@deskflow.com` | `password123` | Department queues, analytics, team routing, KB editor |
+| **Support Agent** | `agent.sarah@deskflow.com` | `password123` | Assigned tickets, ticket queues, canned replies |
+| **Customer** | `rahul@acme.com` | `password123` | Customer portal, company ticket management |
+
+To create a clean administrator without running demo seeds:
+```bash
+php artisan deskflow:create-admin --name="Admin User" --email=admin@yourcompany.com
+```
+
+---
+
+## Docker Deployment
+
+DeskFlow includes an optimized Docker image supporting multiple container roles:
 
 ```bash
-cp .env.docker.example .env.docker        # set APP_KEY (php artisan key:generate --show)
+cp .env.docker.example .env.docker
 docker compose --env-file .env.docker up --build
 ```
-Starts the API (http://localhost:8000), queue worker, scheduler, Postgres, Redis and the frontend (http://localhost:5173).
 
-The single image supports several roles chosen by `CONTAINER_ROLE` (`web`, `worker`, `scheduler`, `cron`, `migrate`). It listens on `$PORT` (default 10000). Details: [`docs/RENDER_DEPLOY.md`](docs/RENDER_DEPLOY.md).
+Container roles are configured using the `CONTAINER_ROLE` environment variable:
 
-## Configuration
+| `CONTAINER_ROLE` | Command Executed | Purpose |
+|---|---|---|
+| `web` (default) | `nginx + php-fpm` | Serves HTTP REST API on `$PORT` |
+| `worker` | `php artisan queue:work` | Processes queued emails and webhooks |
+| `cron` | `php artisan schedule:run` | Single-run scheduler invocation |
+| `scheduler` | `php artisan schedule:work` | Continuous scheduler worker |
+| `migrate` | `php artisan migrate --force` | One-off migration execution |
 
-Copy `.env.example` (local) or see `.env.production.example` (annotated production values). Key settings:
+For production hosting on Render, refer to the [Render Deployment Guide](docs/RENDER_DEPLOY.md).
 
-| Variable | Purpose |
+---
+
+## Environment Variables
+
+| Variable | Default | Purpose |
+|---|---|---|
+| `APP_URL` | `http://localhost:8000` | Canonical API base URL |
+| `FRONTEND_URL` | `http://localhost:5173` | Frontend URL for transactional email links |
+| `CORS_ALLOWED_ORIGINS` | `http://localhost:5173` | Comma-separated allowed CORS origins |
+| `DB_CONNECTION` | `mysql` | Database driver (`mysql` or `pgsql`) |
+| `QUEUE_CONNECTION` | `database` | Queue driver (`sync`, `database`, or `redis`) |
+| `CACHE_STORE` | `database` | Cache driver (`database` or `redis`) |
+| `MAIL_MAILER` | `log` | Email driver (`smtp`, `resend`, `log`) |
+| `CLOUDINARY_CLOUD_NAME` | *(unset)* | Cloudinary cloud identifier |
+| `CLOUDINARY_API_KEY` | *(unset)* | Cloudinary API access key |
+| `CLOUDINARY_API_SECRET` | *(unset)* | Cloudinary API secret |
+| `GROQ_API_KEY` | *(unset)* | Groq API key for AI assistant features |
+| `AI_DAILY_LIMIT` | `800` | Maximum daily AI requests ceiling |
+| `SANCTUM_EXPIRATION` | `null` | Bearer token lifetime in minutes (`null` = persistent) |
+| `CRON_SECRET` | *(unset)* | Secret for `POST /api/v1/internal/tick` cron endpoint |
+| `BROADCAST_CONNECTION` | `log` | Broadcast driver (`reverb` or `log`) |
+
+---
+
+## Available Artisan Commands
+
+| Command | Description |
 |---|---|
-| `APP_KEY`, `APP_URL`, `FRONTEND_URL`, `CORS_ALLOWED_ORIGINS` | identity, email links, which browser origins may call the API |
-| `DB_CONNECTION`, `DB_URL` | database (use the Supabase **session pooler, port 5432**) |
-| `CACHE_STORE`, `QUEUE_CONNECTION` | `database` (default) or `redis` |
-| `MAIL_*` | SMTP. Required in production or nobody can verify their email |
-| `CLOUDINARY_*` | attachments |
-| `GROQ_API_KEY`, `AI_MODEL`, `AI_DAILY_LIMIT` | AI assistant |
-| `INBOUND_EMAIL_SECRET`, `INBOUND_EMAIL_DEFAULT_DEPARTMENT` | reply-by-email webhook (empty secret = off) |
-| `SANCTUM_EXPIRATION` | login lifetime in minutes (default 480) |
-| `CRON_SECRET` | enables `POST /api/v1/internal/tick` so an external pinger can run the scheduler and queue (empty = off) |
-| `BROADCAST_CONNECTION`, `REVERB_*` | realtime updates (`log` = off); run `php artisan reverb:start` |
-| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | browser push (`php artisan webpush:vapid` creates the keys) |
-| `WEBHOOKS_ALLOW_HTTP` | allow plain `http://` webhook URLs (local development only) |
-| `RUN_WORKER_IN_WEB`, `RUN_SCHEDULER_IN_WEB`, `RUN_MIGRATIONS` | Docker only: run the worker/scheduler/migrations inside the web container |
-
-## Everyday commands
-
-| Command | What it does |
-|---|---|
-| `php artisan migrate` | apply database migrations |
-| `php artisan queue:work` | process queued email and jobs (required for email) |
-| `php artisan schedule:work` | run the scheduler locally |
-| `php artisan sla:check-breaches` | mark overdue SLA deadlines as breached |
-| `php artisan automation:run-idle` | apply "idle for N hours" automation rules (scheduled every 10 minutes) |
-| `php artisan reverb:start` | start the realtime WebSocket server |
-| `php artisan webpush:vapid` | create browser-push keys |
-| `php artisan deskflow:create-admin` | create an administrator |
-| `php artisan route:list --path=api` | list endpoints |
-| `php artisan config:clear` | after changing `.env` |
-
-## Testing
-
-```bash
-cp .env.testing.example .env.testing      # local MySQL credentials (git-ignored)
-# CREATE DATABASE deskflow_api_testing;
-php artisan test
-```
-
-- The suite uses a **local MySQL** database (`phpunit.xml` fixes host and name). External services (Groq, Cloudinary) are faked; no network calls.
-- **Safety net:** `tests/TestCase.php` refuses to run unless the database host is local and the name ends in `_testing`, because `RefreshDatabase` drops every table. Never point tests at a hosted database.
-
-## Email templates
-
-All emails share one look (indigo header with the DeskFlow logo, panel, button, footer).
-
-| What | Where |
-|---|---|
-| Layout, header (logo), footer | `resources/views/vendor/mail/html/` (`header.blade.php`, `message.blade.php`) |
-| Colours and typography | `resources/views/vendor/mail/html/themes/default.css` (brand colour `#4f46e5`) |
-| One template per email | `resources/views/emails/` (`otp`, `ticket-reply`, `ticket-resolved`, `staff-activity`, `unassigned`) |
-| The logo | `public/images/email/logo.png` (white on transparent; shown on the indigo header) |
-| Building a mail | `app/Notifications/Concerns/BrandedMail.php` embeds the logo as an inline `cid:` image |
-| Escaping | `app/Support/MarkdownSafe.php` shows customer/agent text literally, so nobody can inject links into an official email |
-
-To change the logo replace `public/images/email/logo.png`. To preview an email, render it with `(new SomeNotification(...))->toMail($user)->render()`.
-
-## Project structure
-
-```
-app/
-  Console/Commands/      CheckSlaBreaches, CreateAdmin
-  Exceptions/            domain exceptions (render as 409/422 JSON)
-  Http/Controllers/Api/V1/   one controller per area
-  Http/Requests/         validation
-  Http/Resources/        JSON shapes (role-aware)
-  Jobs/                  SlaBreachWarningJob
-  Models/                Eloquent models
-  Notifications/         email + in-app notifications
-  Policies/              TicketPolicy
-  Services/              business logic (SLA, routing, FSM, AI, uploads, ...)
-config/                  services.php holds Cloudinary / AI / inbound email settings
-database/migrations/     schema history
-database/seeders/        DEMO data (never run in production)
-docker/                  nginx, php-fpm, supervisor and entrypoint for the image
-docs/                    API.md, RENDER_DEPLOY.md and more
-routes/api.php           all endpoints
-tests/                   feature tests
-```
-
-## Security model
-
-- Public registration can only create **customers**; role and organization are never read from the request.
-- Staff accounts are created by admins (or `deskflow:create-admin` for the first one).
-- Roles are enforced by middleware **and** object-level policies; customers only ever see their own tickets (company admins their organization's), agents their assigned tickets plus their department's unassigned pool, leads their department.
-- Outbound webhooks accept only public https addresses; the address is re-checked on every attempt and the connection is pinned to the checked IP (no DNS rebinding). Browser-push addresses must belong to the browsers' own push services.
-- Realtime pings carry no ticket text; private channels are authorised with the same policies as the API.
-- OTP codes are stored hashed, expire in 10 minutes, are single-use, and lock after 5 wrong attempts. Login, OTP, assistant and AI endpoints are rate limited.
-- Internal notes and audit history are never returned to customers.
-- Attachments are private (Cloudinary `authenticated`); download links expire.
-- Customer text is redacted (emails, phones, links) before it is sent to the AI provider; attachments are never sent.
-- The Docker image runs the application as an unprivileged user.
-
-## Documentation
-
-| File | Contents |
-|---|---|
-| [`docs/API.md`](docs/API.md) | every endpoint, who may call it, throttling |
-| [`docs/RENDER_DEPLOY.md`](docs/RENDER_DEPLOY.md) | deploying this Docker image on Render, step by step |
-| [`../docs/DEPLOYMENT_GUIDE.md`](../docs/DEPLOYMENT_GUIDE.md) | overall deployment overview (Render + Vercel) |
-| [`../docs/GO_LIVE_CHECKLIST.md`](../docs/GO_LIVE_CHECKLIST.md) | what to change before going live, email, security checklist |
-| [`../docs/design/`](../docs/design) | original specification and deep-dive documents |
-#   T i c k e t - S y s t e m - L a r a v e l - B a c k e n d  
- 
+| `php artisan migrate` | Run database migrations |
+| `php artisan db:seed` | Seed demo accounts, tickets, departments, and SLA plans |
+| `php artisan deskflow:create-admin` | Interactively provision a new administrator account |
+| `php artisan queue:work` | Start background queue worker |
+| `php artisan schedule:work` | Start local development task scheduler |
+| `php artisan sla:check-breaches` | Evaluate all active tickets for SLA deadline breaches |
+| `php artisan webpush:vapid` | Generate public and private VAPID keys for browser push |
