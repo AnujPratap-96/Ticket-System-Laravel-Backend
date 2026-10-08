@@ -1,0 +1,55 @@
+# Local stack: API + queue worker + scheduler + Postgres + Redis (+ the built frontend).
+#
+#   cp .env.docker.example .env.docker      # then set APP_KEY (php artisan key:generate --show)
+#   docker compose --env-file .env.docker up --build
+#   docker compose exec api su-exec www-data php artisan db:seed     # optional demo data
+#
+# One image, several roles: CONTAINER_ROLE picks what each container does (see Dockerfile).
+x-api: &api
+  build: .
+  env_file: .env.docker
+  depends_on:
+    db: { condition: service_healthy }
+    redis: { condition: service_started }
+
+services:
+  api:
+    <<: *api
+    environment:
+      CONTAINER_ROLE: web
+      PORT: "10000"
+      RUN_MIGRATIONS: "true"          # only the web container migrates
+    ports: ["8000:10000"]
+
+  worker:
+    <<: *api
+    environment: { CONTAINER_ROLE: worker }
+
+  scheduler:
+    <<: *api
+    environment: { CONTAINER_ROLE: scheduler }
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: deskflow
+      POSTGRES_USER: deskflow
+      POSTGRES_PASSWORD: secret
+    volumes: [pg-data:/var/lib/postgresql/data]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U deskflow -d deskflow"]
+      interval: 5s
+      retries: 20
+
+  redis:
+    image: redis:7-alpine
+
+  frontend:
+    build:
+      context: ../deskflow-frontend
+      args:
+        VITE_API_URL: http://localhost:8000/api/v1
+    ports: ["5173:80"]
+
+volumes:
+  pg-data:

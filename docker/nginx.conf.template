@@ -1,0 +1,44 @@
+# Rendered at start-up by entrypoint.sh: ${PORT} is replaced with the platform-assigned port.
+worker_processes auto;
+pid /tmp/nginx.pid;
+error_log /dev/stderr warn;
+
+events { worker_connections 1024; }
+
+http {
+  include       /etc/nginx/mime.types;
+  default_type  application/octet-stream;
+  access_log    /dev/stdout;
+  server_tokens off;
+  sendfile      on;
+  keepalive_timeout 30;
+  client_max_body_size 2m;            # JSON API only; file uploads go straight to Cloudinary
+  gzip on;
+  gzip_types application/json text/plain text/css application/javascript;
+
+  server {
+    listen 0.0.0.0:${PORT};
+    server_name _;
+    root /var/www/html/public;
+    index index.php;
+
+    # Never serve dotfiles (.env, .git ...)
+    location ~ /\.(?!well-known) { deny all; return 404; }
+
+    location / {
+      try_files $uri /index.php?$query_string;
+    }
+
+    location ~ \.php$ {
+      try_files $uri =404;
+      include /etc/nginx/fastcgi_params;
+      fastcgi_pass 127.0.0.1:9000;
+      fastcgi_index index.php;
+      fastcgi_param SCRIPT_FILENAME $realpath_root$fastcgi_script_name;
+      fastcgi_param DOCUMENT_ROOT   $realpath_root;
+      fastcgi_read_timeout 60s;
+      fastcgi_buffers 16 16k;
+      fastcgi_buffer_size 32k;
+    }
+  }
+}
