@@ -108,6 +108,9 @@ class BulkTicketController extends Controller
             if ($user->role !== UserRole::ADMIN && $target->department_id !== $ticket->department_id) {
                 abort(422, "The agent is not in this ticket's department.");
             }
+            if ($user->role === UserRole::ADMIN && $target->department_id && $target->department_id !== $ticket->department_id) {
+                $ticket->update(['department_id' => $target->department_id]);
+            }
         }
 
         $expected = null;

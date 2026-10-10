@@ -29,11 +29,7 @@ class AccountEraser
         $isCustomer = $user->role === UserRole::CUSTOMER;
 
         DB::transaction(function () use ($user, $isCustomer) {
-            if ($isCustomer) {
-                TicketMessage::where('sender_id', $user->id)->update(['body' => '[removed at the customer\'s request]', 'attachments_json' => null]);
-                Ticket::where('customer_id', $user->id)->update(['description' => '[removed at the customer\'s request]', 'attachments_json' => null]);
-                TicketRating::where('customer_id', $user->id)->update(['comment' => null]);
-            } else {
+            if (! $isCustomer) {
                 Ticket::where('assigned_agent_id', $user->id)->update(['assigned_agent_id' => null]);   // back to the pool
             }
 
@@ -43,15 +39,22 @@ class AccountEraser
             $user->notifications()->delete();
             $user->tokens()->delete();
 
+            $hasTickets = Ticket::where('customer_id', $user->id)->orWhere('assigned_agent_id', $user->id)->exists();
+            $hasMessages = TicketMessage::where('sender_id', $user->id)->exists();
+            $hasAudits = DB::table('ticket_audits')->where('actor_id', $user->id)->exists();
+
+            if (! $hasTickets && ! $hasMessages && ! $hasAudits) {
+                $user->delete();
+                return;
+            }
+
+            // Keep the row with the user's real name and email intact, but mark suspended
             $user->forceFill([
-                'name' => 'Deleted user',
-                'email' => "deleted-{$user->id}@deleted.invalid",
                 'password' => Str::random(40),
                 'is_active' => false,
                 'is_org_admin' => false,
                 'is_available_for_routing' => false,
                 'avatar_public_id' => null,
-                'organization_id' => null,
                 'two_factor_secret' => null,
                 'two_factor_recovery_codes' => null,
                 'two_factor_confirmed_at' => null,

@@ -186,6 +186,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/organizations', [OrganizationController::class, 'index']);
             Route::post('/organizations', [OrganizationController::class, 'store']);
             Route::patch('/organizations/{organization}', [OrganizationController::class, 'update']);
+            Route::delete('/organizations/{organization}', [OrganizationController::class, 'destroy']);
             Route::post('/organizations/{organization}/attach-customers', [OrganizationController::class, 'attachCustomers']);
             Route::get('/organizations/{organization}/customers', [OrganizationController::class, 'customers']);
             Route::patch('/organizations/{organization}/customers/{user}', [OrganizationController::class, 'setCompanyAdmin']);
@@ -204,6 +205,7 @@ Route::prefix('v1')->group(function () {
             Route::get('/ai/settings', [AiSettingsController::class, 'show']);
             Route::patch('/ai/settings', [AiSettingsController::class, 'update']);
             Route::patch('/users/{user}', [UserController::class, 'update']);
+            Route::delete('/users/{user}', [UserController::class, 'destroy']);
             Route::post('/users/{user}/resend-invite', [UserController::class, 'resendInvite']);
             Route::post('/users/{user}/erase', [UserController::class, 'erase']);
             Route::post('/departments', [DepartmentController::class, 'store']);

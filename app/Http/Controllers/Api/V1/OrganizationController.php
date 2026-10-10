@@ -6,6 +6,7 @@ use App\Enums\UserRole;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\OrganizationRequest;
 use App\Models\Organization;
+use App\Models\Ticket;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -77,6 +78,22 @@ class OrganizationController extends Controller
         $user->update(['is_org_admin' => $data['is_org_admin']]);
 
         return response()->json(['message' => $data['is_org_admin'] ? "{$user->name} can now see the whole company's tickets." : "{$user->name} now sees only their own tickets.", 'customer' => $user->only(['id', 'name', 'email', 'is_org_admin', 'is_active'])]);
+    }
+
+    public function destroy(Organization $organization): JsonResponse
+    {
+        User::where('organization_id', $organization->id)->update([
+            'organization_id' => null,
+            'is_org_admin' => false,
+        ]);
+        Ticket::where('organization_id', $organization->id)->update([
+            'organization_id' => null,
+        ]);
+
+        $name = $organization->name;
+        $organization->delete();
+
+        return response()->json(['message' => "Organization {$name} was deleted successfully."]);
     }
 
     private function present(Organization $o): array

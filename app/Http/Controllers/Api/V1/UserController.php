@@ -77,24 +77,40 @@ class UserController extends Controller
     }
 
     /**
-     * Admin: erase someone's personal data (customer or staff). The admin must type the person's email to confirm.
+     * Admin: delete or suspend a user account.
      */
-    public function erase(User $user, Request $request, AccountEraser $eraser): JsonResponse
+    public function destroy(User $user, Request $request, AccountEraser $eraser): JsonResponse
     {
-        $data = $request->validate(['confirm_email' => ['required', 'string']]);
-
-        abort_if($user->id === $request->user()->id, 422, 'You cannot erase your own account here. Use My account instead.');
-        abort_unless(strcasecmp($data['confirm_email'], $user->email) === 0, 422, 'The email you typed does not match this account.');
-        abort_if(str_ends_with($user->email, '@deleted.invalid'), 422, 'This account was already erased.');
+        abort_if($user->id === $request->user()->id, 422, 'You cannot delete your own account.');
         abort_if(
             $user->role === UserRole::ADMIN && $user->is_active && User::where('role', UserRole::ADMIN->value)->where('is_active', true)->count() <= 1,
             422,
             'At least one active admin is required.'
         );
 
+        $name = $user->name;
         $eraser->erase($user);
 
-        return response()->json(['message' => 'The account was erased and the personal data removed.']);
+        return response()->json(['message' => "{$name} has been removed and suspended."]);
+    }
+
+    public function erase(User $user, Request $request, AccountEraser $eraser): JsonResponse
+    {
+        $data = $request->validate(['confirm_email' => ['required', 'string']]);
+
+        abort_if($user->id === $request->user()->id, 422, 'You cannot delete your own account here. Use My account instead.');
+        abort_unless(strcasecmp($data['confirm_email'], $user->email) === 0, 422, 'The email you typed does not match this account.');
+        abort_if(! $user->is_active, 422, 'This account is already suspended.');
+        abort_if(
+            $user->role === UserRole::ADMIN && $user->is_active && User::where('role', UserRole::ADMIN->value)->where('is_active', true)->count() <= 1,
+            422,
+            'At least one active admin is required.'
+        );
+
+        $name = $user->name;
+        $eraser->erase($user);
+
+        return response()->json(['message' => "{$name} has been removed and suspended."]);
     }
 
     public function resendInvite(User $user, Request $request, StaffInviteService $invites): JsonResponse
