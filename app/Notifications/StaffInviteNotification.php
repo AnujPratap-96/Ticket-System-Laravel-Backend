@@ -22,6 +22,7 @@ class StaffInviteNotification extends Notification implements ShouldQueue
         public ?string $invitedBy,
         public string $token,
         public int $days,
+        public ?\App\Models\Tenant $tenant = null,
     ) {}
 
     public function via(object $notifiable): array
@@ -31,9 +32,11 @@ class StaffInviteNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = rtrim(config('app.frontend_url'), '/').'/accept-invite?'.http_build_query(['email' => $this->email, 'token' => $this->token]);
+        $this->forNotifiable($notifiable);
+        $path = '/accept-invite?'.http_build_query(['email' => $this->email, 'token' => $this->token]);
+        $url = $this->tenant ? $this->tenant->url($path) : rtrim(config('app.frontend_url'), '/').$path;
 
-        return $this->branded("You're invited to join DeskFlow Support", 'emails.staff-invite', [
+        return $this->branded("You're invited to join ".$this->brandName(), 'emails.staff-invite', [
             'name' => Str::of($this->name)->before(' ')->toString() ?: $this->name,
             'role' => $this->role === 'lead' ? 'team lead' : $this->role,
             'department' => $this->department ? MarkdownSafe::escape($this->department, 80) : null,

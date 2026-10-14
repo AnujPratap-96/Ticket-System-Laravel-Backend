@@ -35,7 +35,7 @@ class SavedViewController extends Controller
 
         $filters = array_filter(array_intersect_key($data['filters'], array_flip(self::FILTER_KEYS)), fn ($v) => $v !== null && $v !== '');
         abort_if($filters === [], 422, 'Choose at least one filter before saving a view.');
-        abort_if($request->user()->savedViews()->count() >= 25, 422, 'You can keep up to 25 saved views.');
+        abort_if($request->user()->savedViews()->count() >= (int) config('plans.global.saved_views_per_user'), 422, 'You can keep up to '.config('plans.global.saved_views_per_user').' saved views.');
 
         $view = SavedView::create(['user_id' => $request->user()->id, 'name' => $data['name'], 'filters' => $filters]);
 

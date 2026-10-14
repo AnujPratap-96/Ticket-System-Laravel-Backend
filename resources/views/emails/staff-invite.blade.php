@@ -1,12 +1,12 @@
 <x-mail::message>
-# You're invited to DeskFlow
+# You're invited to {{ $brand['name'] ?? 'DeskFlow' }}
 
 Hello {{ $name }},
 
 @if ($invitedBy)
-**{{ $invitedBy }}** has invited you to join the DeskFlow support team as **{{ $role }}**@if ($department) in **{{ $department }}**@endif.
+**{{ $invitedBy }}** has invited you to join the {{ $brand['name'] ?? 'DeskFlow' }} support team as **{{ $role }}**@if ($department) in **{{ $department }}**@endif.
 @else
-You have been invited to join the DeskFlow support team as **{{ $role }}**@if ($department) in **{{ $department }}**@endif.
+You have been invited to join the {{ $brand['name'] ?? 'DeskFlow' }} support team as **{{ $role }}**@if ($department) in **{{ $department }}**@endif.
 @endif
 
 Choose your password to activate your account:

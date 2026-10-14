@@ -7,6 +7,9 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\OrganizationRequest;
 use App\Models\Organization;
 use App\Models\Ticket;
+use App\Services\PlanLimits;
+use App\Services\SlaCalculatorService;
+use Illuminate\Support\Facades\DB;
 use App\Models\User;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -50,14 +53,24 @@ class OrganizationController extends Controller
      * Customers who signed up before this organization existed: link everyone whose email is on its domain
      * (and who has no organization yet).
      */
-    public function attachCustomers(Organization $organization): JsonResponse
+    public function attachCustomers(Organization $organization, PlanLimits $limits): JsonResponse
     {
-        $count = User::where('role', UserRole::CUSTOMER->value)
+        $candidates = User::where('role', UserRole::CUSTOMER->value)
             ->whereNull('organization_id')
-            ->where('email', 'like', '%@'.addcslashes($organization->domain, '%_\\'))
-            ->update(['organization_id' => $organization->id]);
+            ->where('email', 'like', '%@'.addcslashes($organization->domain, '%_\\'));
 
-        return response()->json(['message' => $count === 1 ? '1 customer was added.' : "{$count} customers were added.", 'attached' => $count]);
+        // Never beyond the plan's seat limit.
+        $left = $limits->seatsLeft($organization);
+        $ids = $left === null ? $candidates->pluck('id') : $candidates->orderBy('id')->limit($left)->pluck('id');
+        $count = User::whereIn('id', $ids)->update(['organization_id' => $organization->id]);
+
+        $remaining = User::where('role', UserRole::CUSTOMER->value)->whereNull('organization_id')->where('email', 'like', '%@'.addcslashes($organization->domain, '%_\\'))->count();
+        $msg = $count === 1 ? '1 customer was added.' : "{$count} customers were added.";
+        if ($remaining > 0) {
+            $msg .= " {$remaining} more could not be added because the plan's user limit was reached.";
+        }
+
+        return response()->json(['message' => $msg, 'attached' => $count, 'not_added' => $remaining]);
     }
 
     public function customers(Organization $organization): JsonResponse
@@ -80,32 +93,57 @@ class OrganizationController extends Controller
         return response()->json(['message' => $data['is_org_admin'] ? "{$user->name} can now see the whole company's tickets." : "{$user->name} now sees only their own tickets.", 'customer' => $user->only(['id', 'name', 'email', 'is_org_admin', 'is_active'])]);
     }
 
-    public function destroy(Organization $organization): JsonResponse
+    /**
+     * Delete a company. Its people are unlinked (they become independent customers). Tickets must always belong to a
+     * company, so if it has any the admin must say where they go (?move_to=<organization id>); they then follow that
+     * company's plan from now on (open SLA clocks are recalculated).
+     */
+    public function destroy(Organization $organization, Request $request, SlaCalculatorService $sla): JsonResponse
     {
-        User::where('organization_id', $organization->id)->update([
-            'organization_id' => null,
-            'is_org_admin' => false,
-        ]);
-        Ticket::where('organization_id', $organization->id)->update([
-            'organization_id' => null,
-        ]);
+        $data = $request->validate(['move_to' => ['nullable', 'integer', \App\Tenancy\TenantRule::exists('organizations')]]);
+        $count = $organization->tickets()->count();
+        $target = null;
+
+        if ($count > 0) {
+            abort_if(empty($data['move_to']), 422, "This organization has {$count} ".($count === 1 ? 'ticket' : 'tickets').'. Choose another organization to move them to, then delete it.');
+            abort_if((int) $data['move_to'] === $organization->id, 422, 'Choose a different organization.');
+            $target = Organization::findOrFail($data['move_to']);
+        }
 
         $name = $organization->name;
-        $organization->delete();
 
-        return response()->json(['message' => "Organization {$name} was deleted successfully."]);
+        DB::transaction(function () use ($organization, $target, $sla) {
+            User::where('organization_id', $organization->id)->update(['organization_id' => null, 'is_org_admin' => false]);
+
+            if ($target) {
+                $organization->tickets()->update(['organization_id' => $target->id]);
+                Ticket::where('organization_id', $target->id)->whereNotIn('status', ['resolved', 'closed'])
+                    ->with(['organization', 'department'])->get()->each(fn (Ticket $t) => $sla->attachDeadlines($t));
+            }
+
+            $organization->delete();
+        });
+
+        return response()->json(['message' => $count ? "{$name} was deleted and its {$count} ".($count === 1 ? 'ticket was' : 'tickets were')." moved to {$target->name}." : "{$name} was deleted."]);
     }
 
     private function present(Organization $o): array
     {
+        $limits = app(PlanLimits::class);
+        $usage = $limits->usage($o);
+
         return [
             'id' => $o->id,
             'name' => $o->name,
             'domain' => $o->domain,
             'sla_tier' => $o->sla_tier->value,
             'is_active' => (bool) $o->is_active,
-            'customers_count' => (int) ($o->customers_count ?? 0),
+            'customers_count' => (int) ($o->customers_count ?? $usage['customers']),
             'tickets_count' => (int) ($o->tickets_count ?? 0),
+            // The raw overrides (null = plan default) for the form, and what actually applies for the usage bars.
+            'overrides' => ['monthly_ticket_limit' => $o->monthly_ticket_limit, 'max_customers' => $o->max_customers, 'max_open_per_customer' => $o->max_open_per_customer],
+            'limits' => $limits->for($o),
+            'usage' => $usage,
         ];
     }
 }

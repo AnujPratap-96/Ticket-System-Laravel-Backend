@@ -28,6 +28,10 @@ class AppServiceProvider extends ServiceProvider
     {
         Gate::policy(Ticket::class, TicketPolicy::class);
 
+        // One password rule for every place a password is chosen
+        \Illuminate\Validation\Rules\Password::defaults(fn () => \Illuminate\Validation\Rules\Password::min((int) config('security.password_min_length'))->letters()->numbers()
+            ->when(config('security.check_breached_passwords'), fn ($rule) => $rule->uncompromised(3)));
+
         // Every in-app notification also nudges the recipient's open browser so the bell updates instantly.
         \Illuminate\Support\Facades\Event::listen(\Illuminate\Notifications\Events\NotificationSent::class, function ($e) {
             if ($e->channel === 'database' && $e->notifiable instanceof \App\Models\User) {
@@ -38,6 +42,13 @@ class AppServiceProvider extends ServiceProvider
                 }
             }
         });
+
+        // Writing is limited per person so one account (or a stolen token) cannot flood the queue.
+        RateLimiter::for('ticket-create', fn (Request $request) => [
+            Limit::perMinute((int) config('plans.rate.tickets_per_minute'))->by('tc:m:'.($request->user()?->id ?? $request->ip())),
+            Limit::perHour((int) config('plans.rate.tickets_per_hour'))->by('tc:h:'.($request->user()?->id ?? $request->ip())),
+        ]);
+        RateLimiter::for('message-create', fn (Request $request) => Limit::perMinute((int) config('plans.rate.messages_per_minute'))->by('mc:'.($request->user()?->id ?? $request->ip())));
 
         RateLimiter::for('otp', fn (Request $request) => Limit::perMinute(10)->by($request->ip()));
 

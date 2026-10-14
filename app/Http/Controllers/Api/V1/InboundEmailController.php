@@ -10,12 +10,13 @@ use Illuminate\Http\Request;
 class InboundEmailController extends Controller
 {
     /**
-     * Provider webhook (Postmark inbound JSON, or a generic {from, subject, text} payload).
-     * Authenticated by a shared secret; it is disabled until one is configured.
+     * Provider webhook (Postmark inbound JSON, or a generic {from, subject, text} payload) for ONE workspace
+     * (`?tenant=<slug>`). It is authenticated with that workspace's own secret, so one company's mail provider
+     * can never post into another's helpdesk. Off until the workspace's admin turns the channel on.
      */
     public function receive(Request $request, InboundEmailService $service): JsonResponse
     {
-        $secret = (string) config('services.inbound_email.secret');
+        $secret = (string) ($request->attributes->get('tenant')?->inbound_secret ?? '');
         $given = (string) ($request->header('X-Webhook-Secret') ?? $request->query('secret', ''));
 
         abort_if($secret === '', 503, 'Inbound email is not configured.');

@@ -20,6 +20,7 @@ class TicketCreationService
         private TicketRoutingService $routing,
         private AuditLoggerService $audit,
         private AutomationEngine $automation,
+        private PlanLimits $limits,
     ) {}
 
     /**
@@ -36,6 +37,8 @@ class TicketCreationService
             ['domain' => 'default.local'],
             ['name' => 'Default Organization', 'sla_tier' => 'standard']
         )->id;
+
+        $this->limits->assertCanCreateTicket(Organization::findOrFail($orgId), $customer);
 
         $ticket = DB::transaction(function () use ($customer, $data, $orgId, $ip) {
             $ticket = Ticket::create([
@@ -71,6 +74,13 @@ class TicketCreationService
         $this->automation->fire('ticket_created', $ticket);
         \App\Jobs\AnalyzeTicketJob::dispatch($ticket->id);
         app(TicketEvents::class)->publish('ticket.created', $ticket->refresh());
+
+        // Acknowledge to the customer (never blocks filing the ticket)
+        try {
+            $customer->notify(new \App\Notifications\TicketReceivedNotification($ticket));
+        } catch (\Throwable $e) {
+            \Illuminate\Support\Facades\Log::warning('Ticket acknowledgement failed', ['ticket' => $ticket->id, 'error' => $e->getMessage()]);
+        }
 
         return $ticket->refresh();
     }

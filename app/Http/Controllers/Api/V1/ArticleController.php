@@ -49,7 +49,7 @@ class ArticleController extends Controller
         // Remember searches (not browsing) so admins can see what people look for and do not find.
         $term = mb_strtolower(trim((string) $request->query('q')));
         if (mb_strlen($term) >= 3 && ! $request->filled('category')) {
-            DB::table('kb_searches')->insert(['query' => mb_substr($term, 0, 100), 'results' => $found->count(), 'created_at' => now()]);
+            DB::table('kb_searches')->insert(['tenant_id' => \App\Tenancy\TenantContext::id(), 'query' => mb_substr($term, 0, 100), 'results' => $found->count(), 'created_at' => now()]);
         }
 
         return response()->json(['smart' => $smart, 'articles' => $found->map(fn ($a) => is_array($a) || $a instanceof \stdClass ? (array) $a : $a->only(['id', 'title', 'slug', 'summary', 'category']))->values()]);
@@ -101,7 +101,7 @@ class ArticleController extends Controller
             'top_viewed' => $articles->sortByDesc('views')->take(5)->values()->map(fn ($a) => ['id' => $a->id, 'title' => $a->title, 'views' => $a->views]),
             'least_helpful' => $rated->filter(fn ($a) => $a->unhelpful_count > 0)->sortByDesc(fn ($a) => $a->unhelpful_count / ($a->helpful_count + $a->unhelpful_count))->take(5)->values()
                 ->map(fn ($a) => ['id' => $a->id, 'title' => $a->title, 'helpful' => $a->helpful_count, 'unhelpful' => $a->unhelpful_count]),
-            'missing_answers' => DB::table('kb_searches')->where('results', 0)->where('created_at', '>=', now()->subDays(30))
+            'missing_answers' => DB::table('kb_searches')->where('tenant_id', \App\Tenancy\TenantContext::id())->where('results', 0)->where('created_at', '>=', now()->subDays(30))
                 ->selectRaw('query, count(*) as times')->groupBy('query')->orderByDesc('times')->limit(10)->get()
                 ->map(fn ($r) => ['query' => $r->query, 'times' => (int) $r->times]),
             'totals' => ['published' => $articles->count(), 'views' => $articles->sum('views'), 'helpful' => $articles->sum('helpful_count'), 'unhelpful' => $articles->sum('unhelpful_count')],
@@ -154,7 +154,7 @@ class ArticleController extends Controller
             'summary' => ['nullable', 'string', 'max:500'],
             'body' => ['required', 'string', 'max:50000'],
             'is_published' => ['required', 'boolean'],
-            'department_id' => ['nullable', Rule::exists('departments', 'id')],
+            'department_id' => ['nullable', \App\Tenancy\TenantRule::exists('departments')],
             'category' => ['nullable', 'string', 'max:60'],
         ]);
     }

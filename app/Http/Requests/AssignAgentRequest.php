@@ -14,7 +14,7 @@ class AssignAgentRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'agent_id' => ['nullable', 'exists:users,id'],
+            'agent_id' => ['nullable', \App\Tenancy\TenantRule::exists('users')],
         ];
     }
 }

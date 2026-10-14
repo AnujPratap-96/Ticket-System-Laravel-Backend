@@ -47,13 +47,13 @@ class CloudinaryService
      * Signed parameters for uploading ONE profile photo under a server-chosen, unguessable public_id.
      * The image is downscaled on upload (max 512 px) and stored publicly, as profile photos are shown to other users.
      */
-    public function signAvatarUpload(string $publicId): array
+    public function signAvatarUpload(string $publicId, string $transformation = 'c_limit,w_512,h_512'): array
     {
         $params = [
             'allowed_formats' => implode(',', self::AVATAR_FORMATS),
             'public_id' => $publicId,
             'timestamp' => time(),
-            'transformation' => 'c_limit,w_512,h_512',
+            'transformation' => $transformation,
             'type' => 'upload',
         ];
 
@@ -65,6 +65,12 @@ class CloudinaryService
             'public_id' => $publicId,
             'params' => $params,
         ];
+    }
+
+    /** A workspace logo, scaled to fit (never cropped), for emails and headers. */
+    public function logoUrl(string $publicId): string
+    {
+        return "https://res.cloudinary.com/{$this->cfg('cloud_name')}/image/upload/c_limit,w_480,h_160,f_auto,q_auto/{$publicId}";
     }
 
     /**

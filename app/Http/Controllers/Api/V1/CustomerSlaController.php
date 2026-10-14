@@ -41,6 +41,10 @@ class CustomerSlaController extends Controller
             'plan' => $tier,
             'organization' => $org?->name,
             'targets' => $targets,
+            'limits' => $org && $org->domain !== 'default.local' ? [
+                'plan' => app(\App\Services\PlanLimits::class)->for($org),
+                'usage' => app(\App\Services\PlanLimits::class)->usage($org),
+            ] : null,
             'last_90_days' => [
                 'tickets' => $total,
                 'answered' => $answered,

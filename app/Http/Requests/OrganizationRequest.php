@@ -32,9 +32,13 @@ class OrganizationRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'min:2', 'max:255'],
-            'domain' => ['required', 'string', 'max:255', 'regex:/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/', Rule::unique('organizations', 'domain')->ignore($id)],
+            'domain' => ['required', 'string', 'max:255', 'regex:/^(?!-)[a-z0-9-]+(\.[a-z0-9-]+)+$/', Rule::unique('organizations', 'domain')->where('tenant_id', \App\Tenancy\TenantContext::id())->ignore($id)],
             'sla_tier' => ['required', Rule::enum(SlaTier::class)],
             'is_active' => ['sometimes', 'boolean'],
+            // Empty = the plan's default, 0 = unlimited for this company
+            'monthly_ticket_limit' => ['nullable', 'integer', 'min:0', 'max:1000000'],
+            'max_customers' => ['nullable', 'integer', 'min:0', 'max:100000'],
+            'max_open_per_customer' => ['nullable', 'integer', 'min:0', 'max:10000'],
         ];
     }
 

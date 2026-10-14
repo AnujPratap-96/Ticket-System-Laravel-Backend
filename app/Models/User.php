@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToTenant;
 use App\Enums\UserRole;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -13,6 +14,8 @@ use Laravel\Sanctum\HasApiTokens;
 
 class User extends Authenticatable
 {
+    use BelongsToTenant;
+
     use HasApiTokens, HasFactory, Notifiable;
 
     protected $fillable = [
@@ -24,6 +27,7 @@ class User extends Authenticatable
         'role',
         'department_id',
         'is_available_for_routing',
+        'away_until',
         'max_active_tickets',
         'last_assigned_at',
         'email_verified_at',
@@ -51,6 +55,7 @@ class User extends Authenticatable
         'two_factor_recovery_codes' => 'encrypted:array',
         'two_factor_confirmed_at' => 'datetime',
         'last_assigned_at' => 'datetime',
+        'away_until' => 'datetime',
     ];
 
     public function pushSubscriptions(): HasMany

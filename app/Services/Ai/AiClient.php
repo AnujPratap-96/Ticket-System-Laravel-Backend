@@ -93,6 +93,7 @@ class AiClient
 
     private function usageKey(): string
     {
-        return 'ai:usage:'.now()->utc()->format('Ymd');
+        // each workspace has its own daily budget
+        return 'ai:usage:'.(\App\Tenancy\TenantContext::id() ?? 0).':'.now()->utc()->format('Ymd');
     }
 }

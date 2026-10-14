@@ -49,8 +49,15 @@ class UserController extends Controller
     /**
      * Admin-only: provision staff (or customer) accounts.
      */
-    public function store(StoreUserRequest $request, StaffInviteService $invites): JsonResponse
+    public function store(StoreUserRequest $request, StaffInviteService $invites, \App\Services\PlanLimits $limits): JsonResponse
     {
+        if ($request->role === UserRole::CUSTOMER->value && $request->organization_id) {
+            $org = \App\Models\Organization::findOrFail($request->organization_id);
+            if (! $limits->hasSeatFor($org)) {
+                throw new \App\Exceptions\QuotaExceededException("{$org->name} has reached the number of user accounts its plan allows. Raise the limit on the organization first.", 'customers');
+            }
+        }
+
         $invited = ! $request->filled('password');
 
         $user = User::create([
@@ -77,7 +84,8 @@ class UserController extends Controller
     }
 
     /**
-     * Admin: delete or suspend a user account.
+     * Admin: remove a person from the system. Deleted outright when they have no history, otherwise suspended
+     * (name and email kept so old tickets still make sense). Suspended accounts can be reactivated.
      */
     public function destroy(User $user, Request $request, AccountEraser $eraser): JsonResponse
     {
@@ -89,28 +97,33 @@ class UserController extends Controller
         );
 
         $name = $user->name;
-        $eraser->erase($user);
+        $outcome = $eraser->remove($user);
 
-        return response()->json(['message' => "{$name} has been removed and suspended."]);
+        return response()->json([
+            'message' => $outcome === 'deleted' ? "{$name} was deleted." : "{$name} was suspended. Their tickets and history are kept, and you can reactivate them later.",
+            'outcome' => $outcome,
+        ]);
     }
 
+    /**
+     * Admin: erase someone's personal data on request (right to erasure). The admin must type the person's email to confirm.
+     */
     public function erase(User $user, Request $request, AccountEraser $eraser): JsonResponse
     {
         $data = $request->validate(['confirm_email' => ['required', 'string']]);
 
-        abort_if($user->id === $request->user()->id, 422, 'You cannot delete your own account here. Use My account instead.');
+        abort_if($user->id === $request->user()->id, 422, 'You cannot erase your own account here. Use My account instead.');
         abort_unless(strcasecmp($data['confirm_email'], $user->email) === 0, 422, 'The email you typed does not match this account.');
-        abort_if(! $user->is_active, 422, 'This account is already suspended.');
+        abort_if(str_ends_with($user->email, '@deleted.invalid'), 422, 'This account was already erased.');
         abort_if(
             $user->role === UserRole::ADMIN && $user->is_active && User::where('role', UserRole::ADMIN->value)->where('is_active', true)->count() <= 1,
             422,
             'At least one active admin is required.'
         );
 
-        $name = $user->name;
         $eraser->erase($user);
 
-        return response()->json(['message' => "{$name} has been removed and suspended."]);
+        return response()->json(['message' => 'The account was erased and the personal data removed.']);
     }
 
     public function resendInvite(User $user, Request $request, StaffInviteService $invites): JsonResponse

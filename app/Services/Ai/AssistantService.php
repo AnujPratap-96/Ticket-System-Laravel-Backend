@@ -82,7 +82,7 @@ class AssistantService
 
         // Decisions carry no personal data, so identical questions can share one AI call (saves free-tier quota).
         // The answer depends on the audience (staff get console help), so the audience is part of the key.
-        $cacheKey = $history === [] ? 'assistant:decision:'.($staff ? 'staff:' : 'public:').hash('sha256', mb_strtolower($message)) : null;
+        $cacheKey = $history === [] ? 'assistant:decision:'.(\App\Tenancy\TenantContext::id() ?? 0).':'.($staff ? 'staff:' : 'public:').hash('sha256', mb_strtolower($message)) : null;
         if ($cacheKey && ($hit = Cache::get($cacheKey))) {
             return $hit;
         }

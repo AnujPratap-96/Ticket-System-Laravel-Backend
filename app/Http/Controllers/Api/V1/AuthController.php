@@ -9,7 +9,10 @@ use App\Http\Requests\RegisterRequest;
 use App\Http\Requests\ResetPasswordRequest;
 use App\Http\Requests\VerifyOtpRequest;
 use App\Notifications\PasswordChangedNotification;
+use App\Exceptions\QuotaExceededException;
+use App\Services\LoginLockout;
 use App\Services\OtpService;
+use App\Services\PlanLimits;
 use App\Support\DeviceLabel;
 use App\Services\StaffInviteService;
 use App\Http\Resources\UserResource;
@@ -25,7 +28,17 @@ use Illuminate\Validation\ValidationException;
 
 class AuthController extends Controller
 {
-    public function __construct(private OtpService $otp) {}
+    public function __construct(private OtpService $otp, private PlanLimits $limits, private LoginLockout $lockout) {}
+
+    /** A company on a seat-limited plan may be full: refuse before a code is sent or an account is made. */
+    private function assertSeatFor(string $email): void
+    {
+        $org = Organization::where('domain', substr(strrchr($email, '@'), 1))->where('is_active', true)->first();
+
+        if ($org && ! $this->limits->hasSeatFor($org)) {
+            throw new QuotaExceededException("{$org->name} has reached the number of user accounts its plan allows. Ask your company's administrator to add you or to raise the limit.", 'customers');
+        }
+    }
 
     /**
      * Step 1 of self-registration: validate and email a one-time code.
@@ -33,6 +46,8 @@ class AuthController extends Controller
      */
     public function register(RegisterRequest $request): JsonResponse
     {
+        $this->assertSeatFor(strtolower($request->email));
+
         $this->otp->start('registration', strtolower($request->email), [
             'name' => $request->name,
             'password_hash' => Hash::make($request->password),
@@ -58,6 +73,8 @@ class AuthController extends Controller
             abort(422, 'This email is already registered.');
         }
 
+        $this->assertSeatFor($email);   // the company may have filled up while the code was in the mailbox
+
         $domain = substr(strrchr($email, '@'), 1);
         $organization = Organization::where('domain', $domain)->where('is_active', true)->first();
 
@@ -75,7 +92,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Email verified. Account created.',
             'token' => $this->issueToken($user),
-            'user' => new UserResource($user),
+            'user' => new UserResource($user->loadMissing('tenant')),
         ], 201);
     }
 
@@ -114,8 +131,9 @@ class AuthController extends Controller
         abort_if(! $user, 422, 'Invalid verification code.');
 
         $user->forceFill(['password' => $request->password, 'email_verified_at' => $user->email_verified_at ?? now()])->save();
-        // A reset must end every existing session.
+        // A reset must end every existing session, and proves the email is theirs: lift any lock.
         $user->tokens()->delete();
+        $this->lockout->clear($email);
 
         return response()->json(['message' => 'Password updated. Please sign in with your new password.']);
     }
@@ -137,7 +155,7 @@ class AuthController extends Controller
         $data = $request->validate([
             'email' => ['required', 'email'],
             'token' => ['required', 'string', 'max:100'],
-            'password' => ['required', 'string', 'min:8', 'max:128', 'confirmed'],
+            'password' => ['required', 'string', \Illuminate\Validation\Rules\Password::default(), 'max:128', 'confirmed'],
         ]);
 
         $invite = $invites->find($data['email'], $data['token']);
@@ -150,19 +168,31 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Welcome aboard! Your account is ready.',
             'token' => $this->issueToken($user),
-            'user' => new UserResource($user->load('department')),
+            'user' => new UserResource($user->load('department', 'tenant')),
         ]);
     }
 
     public function login(LoginRequest $request): JsonResponse
     {
-        $user = User::where('email', $request->email)->first();
+        if ($seconds = $this->lockout->remaining($request->email)) {
+            return response()->json([
+                'message' => 'Too many wrong passwords. For your security this account is locked for '.ceil($seconds / 60).' more minute(s). You can reset your password to get in sooner.',
+                'code' => 'account_locked',
+                'retry_after' => $seconds,
+            ], 429);
+        }
+
+        $user = User::where('email', strtolower($request->email))->first();
 
         if (! $user || ! Hash::check($request->password, $user->password)) {
+            $this->lockout->fail($request->email);
+
             throw ValidationException::withMessages([
                 'email' => ['The provided credentials are incorrect.'],
             ]);
         }
+
+        $this->lockout->clear($request->email);
 
         if (! $user->is_active) {
             return response()->json(['message' => 'This account has been deactivated. Contact an administrator.', 'code' => 'account_inactive'], 403);
@@ -189,7 +219,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful',
             'token' => $this->issueToken($user),
-            'user' => new UserResource($user),
+            'user' => new UserResource($user->loadMissing('tenant')),
         ]);
     }
 
@@ -221,7 +251,7 @@ class AuthController extends Controller
         return response()->json([
             'message' => 'Login successful',
             'token' => $this->issueToken($user),
-            'user' => new UserResource($user),
+            'user' => new UserResource($user->loadMissing('tenant')),
         ]);
     }
 
@@ -234,12 +264,14 @@ class AuthController extends Controller
 
     public function me(Request $request): JsonResponse
     {
-        $user = $request->user()->loadMissing('department', 'organization');
+        $user = $request->user()->loadMissing('department', 'organization', 'tenant');
 
         return response()->json([
-            'user' => new UserResource($user),
+            'user' => new UserResource($user->loadMissing('tenant')),
             'permissions' => $this->permissionsFor($user->role),
             'two_factor_enabled' => $user->hasTwoFactor(),
+            // The workspace requires it for staff and this person has not set it up yet
+            'two_factor_setup_required' => (bool) ($user->tenant?->require_two_factor && $user->role->isStaff() && ! $user->hasTwoFactor()),
         ]);
     }
 
@@ -248,7 +280,16 @@ class AuthController extends Controller
         // The token's name records the device, so the user can recognise it in "Active sessions".
         $name = DeviceLabel::for(request()->userAgent(), request()->ip());
 
-        return $user->createToken($name, ["role:{$user->role->value}"])->plainTextToken;
+        $token = $user->createToken($name, ["role:{$user->role->value}"])->plainTextToken;
+
+        // Keep only the newest N devices signed in: old test logins and forgotten browsers do not pile up.
+        $keep = (int) config('plans.global.sessions_per_user', 10);
+        $stale = $user->tokens()->orderByDesc('id')->skip($keep)->take(1000)->pluck('id');
+        if ($stale->isNotEmpty()) {
+            $user->tokens()->whereIn('id', $stale)->delete();
+        }
+
+        return $token;
     }
 
     // ---- Password and sessions ----------------------------------------------------------------
@@ -257,7 +298,7 @@ class AuthController extends Controller
     {
         $data = $request->validate([
             'current_password' => ['required', 'string'],
-            'password' => ['required', 'string', 'min:8', 'max:128', 'confirmed', 'different:current_password'],
+            'password' => ['required', 'string', \Illuminate\Validation\Rules\Password::default(), 'max:128', 'confirmed', 'different:current_password'],
         ]);
 
         $user = $request->user();

@@ -1,7 +1,7 @@
 # Deploying the DeskFlow API on Render (Docker)
 
 This guide takes the API from a Git repository to a running service on [Render](https://render.com), using the `Dockerfile` in `deskflow-api/`.
-The frontend is deployed separately on Vercel (see `DEPLOYMENT_GUIDE.md`).
+The frontend is deployed separately on Vercel (see the Deployment section of `../../deskflow-frontend/README.md`).
 
 > **Status:** the image, config files and `render.yaml` were written and syntax-checked (nginx, php-fpm and the entrypoint script all validate), but the Docker image itself has **not been built or run** by the author. Do the *local Docker test* in section 10 first. Expect to fix a small thing or two on the first build.
 
@@ -39,8 +39,7 @@ One image, three Render services. The environment variable **`CONTAINER_ROLE`** 
 - **Repository layout** (this guide assumes it):
   ```
   repo-root/
-  ├── render.yaml
-  ├── deskflow-api/        <- Dockerfile lives here
+  ├── deskflow-api/        <- Dockerfile, render.yaml and render.free.yaml live here
   └── deskflow-frontend/
   ```
 - External services, each with credentials ready:
@@ -109,7 +108,7 @@ Create an **Environment Group** called **`deskflow-shared`** first (Render dashb
 |---|---|
 | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET` | attachments (without them uploads are disabled) |
 | `GROQ_API_KEY`, `AI_MODEL=qwen/qwen3.8-27b`, `AI_DAILY_LIMIT=800` | AI assistant (without a key the chat bubble falls back to help articles) |
-| `INBOUND_EMAIL_SECRET`, `INBOUND_EMAIL_DEFAULT_DEPARTMENT` | customers replying by email (empty secret = endpoint off) |
+| `TURNSTILE_SECRET` | optional human check on sign-up / forgot password |
 | `SANCTUM_EXPIRATION=480` | login lifetime in minutes |
 
 ### Set per service, not in the group
@@ -128,10 +127,10 @@ Do **not** set `DB_HOST`, `DB_PORT`, `DB_DATABASE`, `DB_USERNAME` or `DB_PASSWOR
 
 ## 5. Deploy option A: Blueprint (recommended)
 
-1. Push the repo, including `render.yaml` at the root.
+1. Push the repo. `render.yaml` is inside `deskflow-api/`: when you create the Blueprint, set its root directory to `deskflow-api`.
 2. Create the **`deskflow-shared`** environment group with the variables from section 4.
 3. Render dashboard > **New +** > **Blueprint** > connect the repo > select the branch.
-4. Render reads `render.yaml` and lists three services: `deskflow-api` (web), `deskflow-worker` and `deskflow-scheduler` (cron). Check the plan is **Starter** (or higher) on each.
+4. Render reads `render.yaml` and lists the services: `deskflow-api` (web), `deskflow-worker`, `deskflow-scheduler` (cron) and the optional `deskflow-realtime` (live updates; delete it if you do not want realtime). Check the plan is **Starter** (or higher) on each.
 5. Click **Apply**. The first build takes several minutes (it downloads PHP extensions and Composer packages).
 6. When the web service is **Live**, open `https://<service>.onrender.com/up`. It should return HTTP 200.
 
@@ -177,7 +176,7 @@ Starting web on 0.0.0.0:10000
 and then request lines. The Pre-Deploy log shows the migrations that ran.
 
 ### 7.2 Create the first administrator
-Do **not** run the demo seeder in production (it creates accounts with the password `password123`).
+Do **not** run the demo seeder in production (it creates well-known demo accounts).
 
 Web service > **Shell** tab (available on paid instances):
 
@@ -229,7 +228,7 @@ If you add a custom domain on Vercel, add it to `CORS_ALLOWED_ORIGINS` too (comm
 | Custom domain | Service > **Settings > Custom Domains**; Render issues the TLS certificate. Update `APP_URL`. |
 | Logs | Service > **Logs** (all roles write to stderr/stdout). |
 
-Inbound email (optional): configure your mail provider's webhook to `POST https://<service>.onrender.com/api/v1/webhooks/inbound-email` with the header `X-Webhook-Secret: <INBOUND_EMAIL_SECRET>`.
+Inbound email (optional): configure your mail provider's webhook to `POST https://<service>.onrender.com/api/v1/webhooks/inbound-email` with the header `X-Webhook-Secret: <secret>` and `?tenant=<workspace>`. The secret and the default department are set by each workspace admin under **Manage → Workspace settings → Email to tickets** (one secret per workspace).
 
 ---
 
@@ -322,7 +321,7 @@ RUN_WORKER_IN_WEB=true
 RUN_SCHEDULER_IN_WEB=true
 RUN_MIGRATIONS=true        # Pre-Deploy Commands are not available on free instances
 ```
-The container then also runs `queue:work` and `schedule:work` next to nginx and php-fpm (supervisor starts them). `render.free.yaml` at the repository root is a ready-made Blueprint for this.
+The container then also runs `queue:work` and `schedule:work` next to nginx and php-fpm (supervisor starts them). `render.free.yaml` (next to `render.yaml`) is a ready-made Blueprint for this.
 
 Trade-offs: the extra processes share the instance's CPU and memory; they stop when the instance sleeps or restarts, so keep it awake with an external ping of `/up` every 5 to 10 minutes; and if you later run **more than one** web instance, every instance runs its own scheduler (the breach check is idempotent, so this is harmless but wasteful) and you should move to setup A.
 

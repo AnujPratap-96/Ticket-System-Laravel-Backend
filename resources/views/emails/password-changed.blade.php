@@ -3,7 +3,7 @@
 
 Hello {{ $name }},
 
-The password for your DeskFlow account was just changed. All your other devices were signed out.
+The password for your {{ $brand['name'] ?? 'DeskFlow' }} account was just changed. All your other devices were signed out.
 
 <x-mail::panel>
 **When:** {{ $when }}<br>

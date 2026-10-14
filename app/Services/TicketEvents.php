@@ -21,8 +21,12 @@ class TicketEvents
             $this->broadcast($ticket, str_replace('ticket.', '', $event));
             $payload = $this->payload($event, $ticket, $data);
 
-            WebhookEndpoint::where('is_active', true)->get()
-                ->filter(fn (WebhookEndpoint $e) => in_array($event, $e->events ?? [], true))
+            // Always the ticket's OWN workspace's integrations, even when this runs from the scheduler with no workspace set.
+            $endpoints = $ticket->tenant
+                ? \App\Tenancy\TenantContext::run($ticket->tenant, fn () => WebhookEndpoint::where('is_active', true)->get())
+                : collect();
+
+            $endpoints->filter(fn (WebhookEndpoint $e) => in_array($event, $e->events ?? [], true))
                 ->each(fn (WebhookEndpoint $e) => DeliverWebhookJob::dispatch($e->id, $payload, (string) Str::uuid()));
         } catch (\Throwable $e) {
             Log::warning('Publishing ticket event failed', ['event' => $event, 'error' => $e->getMessage()]);
@@ -58,7 +62,7 @@ class TicketEvents
                 'priority' => $ticket->priority->value,
                 'department' => $ticket->department?->name,
                 'assignee' => $ticket->assignedAgent?->name,
-                'url' => rtrim(config('app.frontend_url'), '/').'/staff/tickets/'.$ticket->id,
+                'url' => $ticket->tenant?->url('/staff/tickets/'.$ticket->id) ?? rtrim(config('app.frontend_url'), '/').'/staff/tickets/'.$ticket->id,
             ],
             'data' => $data,
         ];

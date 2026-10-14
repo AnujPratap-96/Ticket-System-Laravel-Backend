@@ -19,11 +19,14 @@ class DepartmentRequest extends FormRequest
 
         return [
             'name' => ['required', 'string', 'max:150'],
-            'slug' => ['required', 'string', 'max:150', 'regex:/^[a-z0-9-]+$/', Rule::unique('departments', 'slug')->ignore($id)],
+            'slug' => ['required', 'string', 'max:150', 'regex:/^[a-z0-9-]+$/', Rule::unique('departments', 'slug')->where('tenant_id', \App\Tenancy\TenantContext::id())->ignore($id)],
             'description' => ['nullable', 'string', 'max:1000'],
             'business_hours_start' => ['required', 'date_format:H:i'],
             'business_hours_end' => ['required', 'date_format:H:i', 'after:business_hours_start'],
             'timezone' => ['required', 'timezone:all'],
+            // Which weekdays the team works (1 = Monday ... 7 = Sunday); at least one
+            'working_days' => ['sometimes', 'array', 'min:1', 'max:7'],
+            'working_days.*' => ['integer', 'between:1,7', 'distinct'],
         ] + TicketForm::definitionRules();
     }
 

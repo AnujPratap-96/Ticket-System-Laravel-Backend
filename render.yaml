@@ -1,0 +1,63 @@
+# Render Blueprint for the DeskFlow API (Docker). The web app goes on Vercel (see ../deskflow-frontend/README.md).
+#
+# BEFORE you apply this Blueprint, create an Environment Group named  deskflow-shared  in the Render dashboard
+# (Dashboard > Env Groups > New) and paste in the variables listed in docs/RENDER_DEPLOY.md, section 4.
+# Every service reads its configuration from that one group, so secrets are entered once.
+#
+# One Dockerfile, several services. CONTAINER_ROLE picks what each does. Render's PORT (default 10000) is honoured
+# by the web and reverb roles automatically. Plans: "starter" or higher is required for workers and cron jobs.
+#
+# In Render, set the Blueprint's "root directory" to deskflow-api (or move this file to the repository root and
+# prefix the two Docker paths with ./deskflow-api).
+
+services:
+  # ---- Web API ------------------------------------------------------------------------------------
+  - type: web
+    name: deskflow-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    healthCheckPath: /up
+    preDeployCommand: php artisan migrate --force --isolated   # once per deploy, before traffic switches over
+    envVars:
+      - fromGroup: deskflow-shared
+      - { key: CONTAINER_ROLE, value: web }
+
+  # ---- Queue worker: emails, webhooks, SLA warnings, AI analysis -----------------------------------
+  - type: worker
+    name: deskflow-worker
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - fromGroup: deskflow-shared
+      - { key: CONTAINER_ROLE, value: worker }
+
+  # ---- Scheduler: SLA breach checks, idle automation, token clean-up -------------------------------
+  - type: cron
+    name: deskflow-scheduler
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    schedule: "* * * * *"
+    envVars:
+      - fromGroup: deskflow-shared
+      - { key: CONTAINER_ROLE, value: cron }
+
+  # ---- Realtime (optional): live ticket updates over WebSockets ------------------------------------
+  # Browsers connect to this service directly, so it is a public web service. In the env group set
+  # BROADCAST_CONNECTION=reverb, REVERB_APP_ID/KEY/SECRET, REVERB_HOST=<this service's hostname>, REVERB_PORT=443,
+  # REVERB_SCHEME=https; in Vercel set VITE_REVERB_APP_KEY / VITE_REVERB_HOST / VITE_REVERB_PORT=443 / VITE_REVERB_SCHEME=https.
+  # Skip this service and leave BROADCAST_CONNECTION=log to keep everything on normal refreshing.
+  - type: web
+    name: deskflow-realtime
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: starter
+    envVars:
+      - fromGroup: deskflow-shared
+      - { key: CONTAINER_ROLE, value: reverb }

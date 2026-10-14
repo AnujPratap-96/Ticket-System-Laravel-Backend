@@ -42,11 +42,12 @@ class TicketResolvedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        $this->forNotifiable($notifiable);
         return $this->branded("[{$this->ticket->ticket_number}] Your ticket was resolved", 'emails.ticket-resolved', [
             'name' => Str::of($notifiable->name)->before(' ')->toString() ?: $notifiable->name,
             'number' => $this->ticket->ticket_number,
             'subject' => MarkdownSafe::escape($this->ticket->title, 120),
-            'url' => rtrim(config('app.frontend_url'), '/')."/portal/tickets/{$this->ticket->id}",
+            'url' => $this->ticket->tenant?->url("/portal/tickets/{$this->ticket->id}") ?? rtrim(config('app.frontend_url'), '/')."/portal/tickets/{$this->ticket->id}",
         ]);
     }
 }

@@ -15,7 +15,7 @@ class SignUploadRequest extends FormRequest
     {
         return [
             // Omit when attaching files to a ticket that does not exist yet.
-            'ticket_id' => ['nullable', 'integer', 'exists:tickets,id'],
+            'ticket_id' => ['nullable', 'integer', \App\Tenancy\TenantRule::exists('tickets')],
         ];
     }
 }

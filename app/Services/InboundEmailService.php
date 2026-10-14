@@ -98,8 +98,9 @@ class InboundEmailService
 
     private function open(User $customer, string $subject, string $body): array
     {
-        $slug = config('services.inbound_email.default_department');
-        $department = ($slug ? Department::where('slug', $slug)->first() : null) ?? Department::orderBy('id')->first();
+        // The workspace's chosen department for email, or its first one.
+        $chosen = \App\Tenancy\TenantContext::get()?->inbound_department_id;
+        $department = ($chosen ? Department::find($chosen) : null) ?? Department::orderBy('id')->first();
 
         if (! $department) {
             return ['result' => 'no_department'];
@@ -107,12 +108,17 @@ class InboundEmailService
 
         $title = Str::limit(trim(preg_replace('/^(re|fwd?):\s*/i', '', $subject)) ?: 'Email request', 250, '');
 
-        $ticket = $this->creator->create($customer, [
-            'department_id' => $department->id,
-            'title' => $title,
-            'description' => $body,
-            'channel' => 'email',
-        ]);
+        try {
+            $ticket = $this->creator->create($customer, [
+                'department_id' => $department->id,
+                'title' => $title,
+                'description' => $body,
+                'channel' => 'email',
+            ]);
+        } catch (\App\Exceptions\QuotaExceededException $e) {
+            // Over the plan's limit: no ticket. (The sender is not auto-replied, so this cannot be used for backscatter.)
+            return ['result' => 'quota_exceeded'];
+        }
 
         return ['result' => 'ticket_created', 'ticket_id' => $ticket->id];
     }

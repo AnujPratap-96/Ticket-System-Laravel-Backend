@@ -25,6 +25,7 @@ class TicketActivityNotification extends Notification implements ShouldQueue
     public const SLA_WARNING = 'sla_warning';
     public const MENTIONED = 'mentioned';
     public const LOW_RATING = 'low_rating';
+    public const MOVED = 'moved';
 
     public function __construct(
         public string $kind,
@@ -46,6 +47,12 @@ class TicketActivityNotification extends Notification implements ShouldQueue
     {
         return new self(self::ASSIGNED, $ticket->id, $ticket->ticket_number,
             "Ticket {$ticket->ticket_number} assigned to you", Str::limit($ticket->title, 200));
+    }
+
+    public static function moved(Ticket $ticket, string $by): self
+    {
+        return new self(self::MOVED, $ticket->id, $ticket->ticket_number,
+            "{$ticket->ticket_number} was moved to your department", "Moved by {$by}. ".Str::limit($ticket->title, 150));
     }
 
     public static function lowRating(Ticket $ticket, int $rating, ?string $comment): self
@@ -86,13 +93,15 @@ class TicketActivityNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
+        $this->forNotifiable($notifiable);
         $staff = $notifiable->role->isStaff();
-        $url = rtrim(config('app.frontend_url'), '/').($staff ? "/staff/tickets/{$this->ticketId}" : "/portal/tickets/{$this->ticketId}");
+        $url = ($notifiable->tenant?->url(($staff ? "/staff/tickets/{$this->ticketId}" : "/portal/tickets/{$this->ticketId}"))) ?? rtrim(config('app.frontend_url'), '/').($staff ? "/staff/tickets/{$this->ticketId}" : "/portal/tickets/{$this->ticketId}");
 
         [$heading, $lead] = match ($this->kind) {
             self::CUSTOMER_REPLIED => ['The customer replied', 'The customer wrote back on a ticket you follow.'],
             self::ASSIGNED => ['A ticket was assigned to you', 'You are now the owner of this ticket.'],
             self::SLA_WARNING => ['SLA deadline approaching', 'A service-level target on this ticket is due in about 15 minutes.'],
+            self::MOVED => ['A ticket was moved to your department', 'An administrator moved this ticket to your department. Its SLA targets now follow your hours.'],
             self::LOW_RATING => ['A customer was unhappy', 'A customer gave a low satisfaction rating after this ticket was resolved.'],
             self::MENTIONED => ['You were mentioned', 'A teammate mentioned you in a note on this ticket.'],
             default => ['Ticket update', 'There is an update on this ticket.'],

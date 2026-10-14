@@ -17,8 +17,8 @@ class CreateTicketRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'organization_id' => ['nullable', 'exists:organizations,id'],
-            'department_id' => ['required', 'exists:departments,id'],
+            'organization_id' => ['nullable', \App\Tenancy\TenantRule::exists('organizations')],
+            'department_id' => ['required', \App\Tenancy\TenantRule::exists('departments')],
             'title' => ['required', 'string', 'max:255'],
             'description' => ['required', 'string', 'max:50000'],
             'priority' => ['nullable', 'string', 'in:low,medium,high,urgent'],

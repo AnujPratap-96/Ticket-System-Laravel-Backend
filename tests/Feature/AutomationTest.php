@@ -111,6 +111,21 @@ class AutomationTest extends TestCase
         $this->assertSame([], $closed->tags()->pluck('name')->all());
     }
 
+    public function test_auto_close_template_closes_quiet_resolved_tickets_only(): void
+    {
+        $this->rule(['trigger' => 'idle', 'idle_hours' => 72, 'name' => 'Auto-close resolved', 'conditions' => [['field' => 'status', 'op' => 'is', 'value' => 'resolved']], 'actions' => [['type' => 'set_status', 'value' => 'closed']]]);
+
+        $done = Ticket::find($this->file('done')->json('ticket.id'));
+        $open = Ticket::find($this->file('still open')->json('ticket.id'));
+        $done->forceFill(['status' => 'resolved', 'resolved_at' => now()->subDays(4)])->saveQuietly();
+        Ticket::whereKey([$done->id, $open->id])->update(['updated_at' => now()->subHours(80)]);
+
+        app(AutomationEngine::class)->runIdle();
+
+        $this->assertSame('closed', $done->fresh()->status->value);
+        $this->assertNotSame('closed', $open->fresh()->status->value);
+    }
+
     public function test_admin_manages_rules_with_validation(): void
     {
         $this->actingAs($this->admin, 'sanctum');

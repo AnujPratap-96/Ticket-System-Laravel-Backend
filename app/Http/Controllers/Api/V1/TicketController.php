@@ -188,9 +188,6 @@ class TicketController extends Controller
             if ($user->role !== UserRole::ADMIN && $target->department_id !== $ticket->department_id) {
                 abort(422, 'Target agent is not in this ticket\'s department.');
             }
-            if ($user->role === UserRole::ADMIN && $target->department_id && $target->department_id !== $ticket->department_id) {
-                $ticket->update(['department_id' => $target->department_id]);
-            }
         }
 
         $expectedAgentId = null;
@@ -202,7 +199,15 @@ class TicketController extends Controller
             $expectedAgentId = $user->id;
         }
 
-        $ticket = $this->routingService->assign($ticket, $target, $user, $request->ip(), $expectedAgentId);
+        // Admin assigning across departments moves the ticket with the agent; if the assignment then fails (409,
+        // agent at capacity) the move is rolled back too.
+        $ticket = DB::transaction(function () use ($ticket, $target, $user, $request, $expectedAgentId) {
+            if ($target && $user->role === UserRole::ADMIN) {
+                $this->routingService->moveToDepartmentOf($ticket, $target, $user, $request->ip());
+            }
+
+            return $this->routingService->assign($ticket, $target, $user, $request->ip(), $expectedAgentId);
+        });
         $ticket->load(self::RELATIONS);
 
         return response()->json([

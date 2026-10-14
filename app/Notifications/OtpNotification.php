@@ -12,7 +12,13 @@ class OtpNotification extends Notification
 {
     use BrandedMail, Queueable;
 
-    public function __construct(public string $purpose, public string $code, public int $ttlMinutes) {}
+    /** The workspace the code is for (the queue worker has no ambient workspace, so remember it now). */
+    public ?int $tenantId = null;
+
+    public function __construct(public string $purpose, public string $code, public int $ttlMinutes)
+    {
+        $this->tenantId = \App\Tenancy\TenantContext::id();
+    }
 
     public function via(object $notifiable): array
     {
@@ -21,16 +27,17 @@ class OtpNotification extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        $this->forNotifiable($notifiable);
         $reset = $this->purpose === 'password_reset';
 
         return $this->branded(
-            $reset ? 'Reset your DeskFlow password' : 'Your DeskFlow verification code',
+            $reset ? 'Reset your '.$this->brandName().' password' : 'Your '.$this->brandName().' verification code',
             'emails.otp',
             [
                 'heading' => $reset ? 'Reset your password' : 'Verify your email address',
                 'intro' => $reset
-                    ? 'Use the code below to choose a new password for your DeskFlow account.'
-                    : 'Welcome to DeskFlow Support! Enter the code below to verify your email and finish creating your account.',
+                    ? 'Use the code below to choose a new password for your '.$this->brandName().' account.'
+                    : 'Welcome to '.$this->brandName().'! Enter the code below to verify your email and finish creating your account.',
                 'code' => $this->code,
                 'ttl' => $this->ttlMinutes,
             ]

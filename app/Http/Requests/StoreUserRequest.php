@@ -15,12 +15,12 @@ class StoreUserRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
+            'email' => ['required', 'string', 'email', 'max:255', \App\Tenancy\TenantRule::unique('users', 'email')],
             // Omit the password to send an email invitation (recommended): the person chooses their own.
-            'password' => ['nullable', 'string', 'min:8'],
+            'password' => ['nullable', 'string', \Illuminate\Validation\Rules\Password::default()],
             'role' => ['required', 'string', 'in:customer,agent,lead,admin'],
-            'organization_id' => ['nullable', 'exists:organizations,id'],
-            'department_id' => ['nullable', 'required_if:role,agent,lead', 'exists:departments,id'],
+            'organization_id' => ['nullable', \App\Tenancy\TenantRule::exists('organizations')],
+            'department_id' => ['nullable', 'required_if:role,agent,lead', \App\Tenancy\TenantRule::exists('departments')],
             'max_active_tickets' => ['nullable', 'integer', 'min:1', 'max:100'],
         ];
     }

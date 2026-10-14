@@ -14,7 +14,7 @@ class HolidayRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'holiday_date' => ['required', 'date_format:Y-m-d', 'unique:business_holidays,holiday_date'],
+            'holiday_date' => ['required', 'date_format:Y-m-d', \App\Tenancy\TenantRule::unique('business_holidays', 'holiday_date')],
             'name' => ['required', 'string', 'max:150'],
         ];
     }

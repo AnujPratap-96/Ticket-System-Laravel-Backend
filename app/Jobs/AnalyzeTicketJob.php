@@ -23,10 +23,17 @@ class AnalyzeTicketJob implements ShouldQueue
 
     public function handle(TicketAnalyzer $analyzer): void
     {
-        $ticket = Ticket::find($this->ticketId);
+        $ticket = Ticket::withoutGlobalScopes()->find($this->ticketId);
         if (! $ticket) {
             return;
         }
+
+        // the AI settings, departments and budget are this ticket's workspace's
+        \App\Tenancy\TenantContext::run($ticket->tenant, fn () => $this->analyze($ticket, $analyzer));
+    }
+
+    private function analyze(Ticket $ticket, TicketAnalyzer $analyzer): void
+    {
 
         $r = $analyzer->analyze($ticket);
         $ticket->forceFill([

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToTenant;
 use App\Enums\TicketChannel;
 use App\Enums\TicketPriority;
 use App\Enums\TicketStatus;
@@ -16,6 +17,8 @@ use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Ticket extends Model
 {
+    use BelongsToTenant;
+
     use HasFactory;
 
     protected $fillable = [
@@ -129,5 +132,10 @@ class Ticket extends Model
     public function rating(): HasOne
     {
         return $this->hasOne(TicketRating::class);
+    }
+
+    public function timeEntries(): \Illuminate\Database\Eloquent\Relations\HasMany
+    {
+        return $this->hasMany(TicketTimeEntry::class);
     }
 }

@@ -50,9 +50,10 @@ return [
     |
     */
 
-    'expiration' => env('SANCTUM_EXPIRATION') !== null && env('SANCTUM_EXPIRATION') !== ''
-        ? (env('SANCTUM_EXPIRATION') === 'null' ? null : (int) env('SANCTUM_EXPIRATION'))
-        : null,
+    // Minutes a login stays valid. Unset = 8 hours. Set SANCTUM_EXPIRATION=null to never expire (local development only).
+    'expiration' => env('SANCTUM_EXPIRATION') === 'null'
+        ? null
+        : (int) (env('SANCTUM_EXPIRATION') !== null && env('SANCTUM_EXPIRATION') !== '' ? env('SANCTUM_EXPIRATION') : 480),
 
     /*
     |--------------------------------------------------------------------------

@@ -203,8 +203,9 @@ class SlaCalculatorService
         $holidays ??= $this->getHolidaysLookup();
 
         [$shiftStart, $shiftEnd] = $this->shiftBounds($department);
+        $days = $department->workingDays();
 
-        $cursor = $this->normalizeToBusinessWindow($cursor, $shiftStart, $shiftEnd, $holidays);
+        $cursor = $this->normalizeToBusinessWindow($cursor, $shiftStart, $shiftEnd, $holidays, $days);
 
         while ($minutesBudget > 0) {
             $shiftCloseToday = $cursor->copy()->setTimeFromTimeString($shiftEnd);
@@ -217,7 +218,7 @@ class SlaCalculatorService
             $minutesBudget -= $minutesLeftToday;
 
             $cursor->addDay()->setTimeFromTimeString($shiftStart);
-            $cursor = $this->normalizeToBusinessWindow($cursor, $shiftStart, $shiftEnd, $holidays);
+            $cursor = $this->normalizeToBusinessWindow($cursor, $shiftStart, $shiftEnd, $holidays, $days);
         }
 
         return $cursor->setTimezone('UTC');
@@ -244,9 +245,10 @@ class SlaCalculatorService
         $end = $to->copy()->setTimezone($tz);
         $total = 0;
         $days = 0;
+        $workingDays = $department->workingDays();
 
         while ($cursor->lt($end) && $days++ < self::MAX_ROLL_DAYS) {
-            if (! $cursor->isWeekend() && ! $holidays->contains($cursor->format('Y-m-d'))) {
+            if (in_array($cursor->dayOfWeekIso, $workingDays, true) && ! $holidays->contains($cursor->format('Y-m-d'))) {
                 $dayStart = $cursor->copy()->setTimeFromTimeString($shiftStart);
                 $dayEnd = $cursor->copy()->setTimeFromTimeString($shiftEnd);
 
@@ -295,10 +297,11 @@ class SlaCalculatorService
         Carbon $cursor,
         string $shiftStart,
         string $shiftEnd,
-        Collection $holidays
+        Collection $holidays,
+        array $workingDays
     ): Carbon {
         for ($i = 0; $i < self::MAX_ROLL_DAYS; $i++) {
-            if ($cursor->isWeekend() || $holidays->contains($cursor->format('Y-m-d'))) {
+            if (! in_array($cursor->dayOfWeekIso, $workingDays, true) || $holidays->contains($cursor->format('Y-m-d'))) {
                 $cursor->addDay()->setTimeFromTimeString($shiftStart);
                 continue;
             }

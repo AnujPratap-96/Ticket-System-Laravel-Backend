@@ -15,7 +15,26 @@ class TicketRoutingService
 {
     public const ACTIVE_STATUSES = [TicketStatus::OPEN, TicketStatus::IN_PROGRESS];
 
-    public function __construct(private AuditLoggerService $auditLogger, private TicketNotifier $notifier) {}
+    public function __construct(private AuditLoggerService $auditLogger, private TicketNotifier $notifier, private SlaCalculatorService $sla) {}
+
+    /**
+     * An admin may assign across departments: the ticket then moves to the agent's department.
+     * Open SLA clocks are recalculated for the new department's hours/timezone, the move is written to the audit log
+     * and the new department's leads are told. Does nothing when the department is unchanged.
+     */
+    public function moveToDepartmentOf(Ticket $ticket, User $target, User $actor, ?string $ip): void
+    {
+        if (! $target->department_id || (int) $target->department_id === (int) $ticket->department_id) {
+            return;
+        }
+
+        $old = $ticket->department?->name;
+        $ticket->update(['department_id' => $target->department_id]);
+        $ticket->load('department', 'organization');
+        $this->sla->attachDeadlines($ticket);
+        $this->auditLogger->log($ticket, 'department_changed', 'department_id', $old, $ticket->department?->name, $actor, $ip);
+        $this->notifier->movedToDepartment($ticket, $actor);
+    }
 
     /**
      * Pick the least-loaded available agent in the ticket's department and assign atomically.
@@ -29,6 +48,7 @@ class TicketRoutingService
             $candidates = User::where('department_id', $ticket->department_id)
                 ->whereIn('role', [UserRole::AGENT->value, UserRole::LEAD->value])
                 ->where('is_available_for_routing', true)
+                ->where(fn ($q) => $q->whereNull('away_until')->orWhere('away_until', '<=', now()))   // on leave until then
                 ->lockForUpdate()
                 ->get();
 

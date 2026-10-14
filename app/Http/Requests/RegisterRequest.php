@@ -18,8 +18,8 @@ class RegisterRequest extends FormRequest
     {
         return [
             'name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'string', 'email', 'max:255', 'unique:users,email'],
-            'password' => ['required', 'string', 'min:8', 'max:128', 'confirmed'],
+            'email' => ['required', 'string', 'email', 'max:255', \App\Tenancy\TenantRule::unique('users', 'email')],
+            'password' => ['required', 'string', \Illuminate\Validation\Rules\Password::default(), 'max:128', 'confirmed'],
         ];
     }
 }

@@ -17,7 +17,7 @@ class CreateMessageRequest extends FormRequest
             'body' => ['required', 'string', 'max:20000'],
             'is_internal_note' => ['nullable', 'boolean'],
             'mentions' => ['nullable', 'array', 'max:10'],
-            'mentions.*' => ['integer', 'exists:users,id'],
+            'mentions.*' => ['integer', \App\Tenancy\TenantRule::exists('users')],
             'force_send' => ['nullable', 'boolean'],
             'attachments' => ['nullable', 'array', 'max:5'],
             'attachments.*.public_id' => ['required', 'string', 'max:512'],

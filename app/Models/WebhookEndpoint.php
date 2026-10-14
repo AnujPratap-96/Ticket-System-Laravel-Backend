@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToTenant;
 use Illuminate\Database\Eloquent\Model;
 
 class WebhookEndpoint extends Model
 {
+    use BelongsToTenant;
+
     public const TYPES = ['slack', 'teams', 'generic'];
 
     public const EVENTS = [

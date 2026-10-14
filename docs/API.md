@@ -249,3 +249,48 @@ Generated from the application's routes (`php artisan route:list --path=api`). B
 |---|---|---|---|---|
 | `POST` | `/api/v1/internal/tick` | public | — | 30,1 |
 | `POST` | `/api/v1/webhooks/inbound-email` | public | — | 120,1 |
+
+## Added after this table was generated
+
+| Method | Path | Access | Roles | Notes |
+|---|---|---|---|---|
+| `DELETE` | `/api/v1/organizations/{id}?move_to={id}` | signed in | roles: admin | Unlinks its people. If it has tickets, `move_to` (another organization) is required; open tickets then follow that plan's SLA |
+| `DELETE` | `/api/v1/users/{id}` | signed in | roles: admin | Deletes the account when it has no history, otherwise suspends it (`outcome`: `deleted` / `suspended`). Reactivate with `PATCH /users/{id}` `{ "is_active": true }` |
+| `POST` | `/api/v1/users/{id}/erase` | signed in | roles: admin | Right to erasure: anonymises the person (typed `confirm_email` required) |
+| `GET` | `/api/v1/usage` | signed in | roles: admin | Per-organization usage against limits, AI usage today, platform caps |
+
+**Plan limits.** `PATCH/POST /organizations` accept `monthly_ticket_limit`, `max_customers`, `max_open_per_customer` (empty = plan default from `config/plans.php`, `0` = unlimited); organization responses include `overrides`, `limits` and `usage`. `GET /me/sla` returns the customer's own company `limits.plan` and `limits.usage`.
+When a limit is reached, ticket creation, sign-up (`POST /auth/register`) and adding customers answer `422` with `{ "code": "quota_exceeded", "limit": "monthly_tickets" | "open_per_customer" | "customers", "message": "…" }`.
+`POST /tickets` is limited to 5 a minute and 30 an hour per person, `POST /tickets/{id}/messages` to 20 a minute (`429`).
+
+## Workspace settings, security and operations
+
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| `GET`/`PATCH` | `/api/v1/settings/branding` | admin | `name`, `brand_color` (`#rrggbb`), `sender_name`, `reply_to_email` |
+| `POST` | `/api/v1/settings/branding/logo/sign`, `/settings/branding/logo` | admin | Signed Cloudinary upload, then attach by `public_id`; `DELETE /settings/branding/logo` removes it |
+| `GET`/`PATCH`/`DELETE` | `/api/v1/settings/email-channel` | admin | Default department / turn off. `POST /settings/email-channel/enable` creates or rotates the secret and returns it **once** with the webhook URL |
+| `GET`/`PATCH` | `/api/v1/settings/security` | admin | `require_two_factor` (the admin must already have 2FA) |
+| `GET` | `/api/v1/settings/export` | admin | JSON download of the workspace's data (3 an hour) |
+| `GET` | `/api/v1/admin-activity` | admin | Paginated log of admin changes (no request bodies) |
+| `PATCH` | `/api/v1/auth/availability` | staff | `{ away_until, release_tickets }`; `null` = back |
+| `GET` | `/api/v1/platform/health` | platform owner | Database, scheduler, queue and backup checks |
+| `DELETE` | `/api/v1/platform/tenants/{id}` | platform owner | Permanent; body `{ "confirm_slug": "<slug>" }` |
+
+Departments accept `working_days` (ISO weekdays 1-7). `POST /auth/register`, `/auth/forgot-password` and `/workspaces/register` take `captcha_token` when `TURNSTILE_SECRET` is set (`422 captcha_failed` otherwise). After 5 wrong passwords `POST /auth/login` answers `429 account_locked` for 15 minutes. With 2FA required, staff without it get `403 two_factor_setup_required` everywhere except `/auth/*` and `/2fa/*`; `GET /auth/me` returns `two_factor_setup_required`.
+
+## Workspaces (multi-tenancy)
+
+Every route above runs inside **one workspace**. Signed-in requests use the person's own workspace automatically. Before sign-in (login, sign-up, public help centre, inbound email) say which one: `X-Tenant: <slug>` header, `?tenant=<slug>`, or the subdomain when `TENANCY_BASE_DOMAIN` is set. Errors: `400 workspace_required`, `404 workspace_not_found`, `403 workspace_suspended`, `403 platform_account` (the platform owner cannot call workspace routes).
+
+| Method | Path | Access | Notes |
+|---|---|---|---|
+| `GET` | `/api/v1/workspaces/{slug}` | public | Name of a workspace (for sign-in pages) |
+| `GET` | `/api/v1/workspaces/available?slug=` | public | Is this address free? |
+| `POST` | `/api/v1/workspaces/register` | public | Start creating a workspace (emails a code) |
+| `POST` | `/api/v1/workspaces/verify` | public | Finish with the code; creates the workspace and its administrator |
+| `POST` | `/api/v1/platform/login` | public | Platform owner sign-in |
+| `GET` | `/api/v1/platform/me`, `POST /platform/logout` | platform owner | |
+| `GET` | `/api/v1/platform/tenants` | platform owner | Workspaces with counts only (people, tickets) |
+| `POST` | `/api/v1/platform/tenants` | platform owner | Create a workspace and invite its first admin |
+| `PATCH` | `/api/v1/platform/tenants/{id}` | platform owner | Rename, suspend (`is_active: false`) or restore |

@@ -43,7 +43,8 @@ class TicketReplyNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        $url = rtrim(config('app.frontend_url'), '/')."/portal/tickets/{$this->ticket->id}";
+        $this->forNotifiable($notifiable);
+        $url = $this->ticket->tenant?->url("/portal/tickets/{$this->ticket->id}") ?? rtrim(config('app.frontend_url'), '/')."/portal/tickets/{$this->ticket->id}";
 
         // The [TICK-...] tag in the subject is how an emailed reply is matched back to the ticket.
         return $this->branded("[{$this->ticket->ticket_number}] New reply: {$this->ticket->title}", 'emails.ticket-reply', [

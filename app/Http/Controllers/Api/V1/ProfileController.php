@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1;
 
 use App\Http\Controllers\Controller;
 use App\Http\Resources\UserResource;
+use App\Models\Ticket;
+use App\Services\TicketRoutingService;
 use App\Services\CloudinaryService;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -39,6 +41,37 @@ class ProfileController extends Controller
         $request->user()->update($changes);
 
         return response()->json(['message' => 'Profile updated', 'user' => new UserResource($request->user()->fresh('department'))]);
+    }
+
+    /**
+     * Staff: mark yourself away (leave) until a date, or come back early (`away_until: null`). Automatic routing skips
+     * you meanwhile. With `release_tickets`, your open tickets go back to the pool and are routed to teammates now.
+     */
+    public function availability(Request $request, TicketRoutingService $routing): JsonResponse
+    {
+        $user = $request->user();
+        abort_unless($user->role->isStaff(), 403, 'Only staff can set availability.');
+
+        $data = $request->validate([
+            'away_until' => ['nullable', 'date', 'after:now', 'before:'.now()->addDays(180)->toDateString()],
+            'release_tickets' => ['sometimes', 'boolean'],
+        ]);
+
+        $user->update(['away_until' => $data['away_until'] ?? null]);
+        $moved = 0;
+
+        if ($user->away_until && $request->boolean('release_tickets')) {
+            Ticket::where('assigned_agent_id', $user->id)->whereIn('status', ['open', 'in_progress'])->get()->each(function (Ticket $t) use ($routing, $user, &$moved) {
+                $t->update(['assigned_agent_id' => null]);
+                $routing->autoRoute($t) && $moved++;
+            });
+        }
+
+        return response()->json([
+            'message' => $user->away_until ? 'You are marked as away.'.($moved ? " {$moved} of your tickets were handed to teammates." : '') : 'Welcome back. You will receive new tickets again.',
+            'user' => new UserResource($user->fresh('department')),
+            'handed_over' => $moved,
+        ]);
     }
 
     /**

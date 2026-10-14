@@ -16,10 +16,11 @@ class UpdateUserRequest extends FormRequest
         return [
             'name' => ['sometimes', 'string', 'max:255'],
             'role' => ['sometimes', 'string', 'in:customer,agent,lead,admin'],
-            'department_id' => ['sometimes', 'nullable', 'exists:departments,id'],
-            'organization_id' => ['sometimes', 'nullable', 'exists:organizations,id'],
+            'department_id' => ['sometimes', 'nullable', \App\Tenancy\TenantRule::exists('departments')],
+            'organization_id' => ['sometimes', 'nullable', \App\Tenancy\TenantRule::exists('organizations')],
             'max_active_tickets' => ['sometimes', 'integer', 'min:1', 'max:100'],
             'is_available_for_routing' => ['sometimes', 'boolean'],
+            'away_until' => ['sometimes', 'nullable', 'date'],
             'is_active' => ['sometimes', 'boolean'],
         ];
     }

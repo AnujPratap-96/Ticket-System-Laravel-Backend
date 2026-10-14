@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToTenant;
 use App\Enums\SlaTier;
 use App\Enums\TicketPriority;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Model;
 
 class SlaPolicy extends Model
 {
+    use BelongsToTenant;
+
     use HasFactory;
 
     protected $fillable = [

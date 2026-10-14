@@ -44,6 +44,13 @@ class TicketNotifier
         );
     }
 
+    /** The new department's leads hear that a ticket was moved to them. */
+    public function movedToDepartment(Ticket $ticket, User $by): void
+    {
+        $leads = User::where('role', UserRole::LEAD->value)->where('department_id', $ticket->department_id)->where('is_active', true)->get();
+        $this->send($leads, TicketActivityNotification::moved($ticket, $by->name));
+    }
+
     /**
      * A 1-2 star rating goes to the department's leads and the admins so it can be followed up.
      */

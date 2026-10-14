@@ -15,7 +15,7 @@ class MergeTicketRequest extends FormRequest
     public function rules(): array
     {
         return [
-            'target_ticket_id' => ['required', 'integer', 'exists:tickets,id', Rule::notIn([$this->route('ticket')?->id])],
+            'target_ticket_id' => ['required', 'integer', \App\Tenancy\TenantRule::exists('tickets'), Rule::notIn([$this->route('ticket')?->id])],
         ];
     }
 }

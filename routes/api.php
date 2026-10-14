@@ -26,11 +26,14 @@ use App\Http\Controllers\Api\V1\SatisfactionController;
 use App\Http\Controllers\Api\V1\SavedViewController;
 use App\Http\Controllers\Api\V1\OrganizationController;
 use App\Http\Controllers\Api\V1\TicketCollaborationController;
+use App\Http\Controllers\Api\V1\TimeEntryController;
 use App\Http\Controllers\Api\V1\TicketController;
 use App\Http\Controllers\Api\V1\TicketInsightsController;
 use App\Http\Controllers\Api\V1\TicketMessageController;
 use App\Http\Controllers\Api\V1\TwoFactorController;
+use App\Http\Controllers\Api\V1\UsageController;
 use App\Http\Controllers\Api\V1\UserController;
+use App\Http\Controllers\Api\V1\WorkspaceSettingsController;
 use App\Http\Controllers\Api\V1\WebhookController;
 use Illuminate\Support\Facades\Route;
 
@@ -41,22 +44,27 @@ use Illuminate\Support\Facades\Route;
 */
 
 Route::prefix('v1')->group(function () {
+    // External scheduler tick (runs due scheduled tasks + drains the queue). Header-secret protected; off unless CRON_SECRET is set.
+    Route::post('/internal/tick', [InternalTickController::class, 'tick'])->middleware('throttle:30,1');
+
+    // ---- Platform console (the platform owner manages workspaces; no workspace data is reachable from here) ----
+    require __DIR__.'/platform.php';
+
+    // ---- Everything below runs inside ONE workspace (see ResolveTenant) ----
+    Route::middleware('tenant')->group(function () {
 
     // 1. Authentication (Public)
     Route::prefix('auth')->group(function () {
-        Route::post('/register', [AuthController::class, 'register'])->middleware('throttle:otp');
+        Route::post('/register', [AuthController::class, 'register'])->middleware(['throttle:otp', 'turnstile']);
         Route::post('/verify-otp', [AuthController::class, 'verifyOtp'])->middleware('throttle:otp');
         Route::get('/invite-info', [AuthController::class, 'inviteInfo'])->middleware('throttle:otp');
         Route::post('/accept-invite', [AuthController::class, 'acceptInvite'])->middleware('throttle:otp');
-        Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware('throttle:otp');
+        Route::post('/forgot-password', [AuthController::class, 'forgotPassword'])->middleware(['throttle:otp', 'turnstile']);
         Route::post('/reset-password', [AuthController::class, 'resetPassword'])->middleware('throttle:otp');
         Route::post('/resend-otp', [AuthController::class, 'resendOtp'])->middleware('throttle:otp');
         Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:login');
         Route::post('/two-factor-challenge', [AuthController::class, 'twoFactorChallenge'])->middleware('throttle:login');
     });
-
-    // External scheduler tick (runs due scheduled tasks + drains the queue). Header-secret protected; off unless CRON_SECRET is set.
-    Route::post('/internal/tick', [InternalTickController::class, 'tick'])->middleware('throttle:30,1');
 
     // Mail-provider webhook (shared-secret authenticated inside the controller)
     Route::post('/webhooks/inbound-email', [InboundEmailController::class, 'receive'])->middleware('throttle:120,1');
@@ -71,7 +79,7 @@ Route::prefix('v1')->group(function () {
     Route::post('/kb/articles/{slug}/vote', [ArticleController::class, 'vote'])->middleware('throttle:20,1');
 
     // 3. Authenticated Routes (Sanctum Protected)
-    Route::middleware('auth:sanctum')->group(function () {
+    Route::middleware(['auth:sanctum', 'two-factor'])->group(function () {
 
         // Session
         Route::post('/auth/logout', [AuthController::class, 'logout']);
@@ -85,6 +93,7 @@ Route::prefix('v1')->group(function () {
 
         // Profile: display name and photo (photo goes browser -> Cloudinary with a signed upload)
         Route::patch('/auth/profile', [ProfileController::class, 'update'])->middleware('throttle:20,1');
+        Route::patch('/auth/availability', [ProfileController::class, 'availability'])->middleware('throttle:20,1');
         Route::post('/auth/avatar/sign', [ProfileController::class, 'signAvatar'])->middleware('throttle:20,1');
         Route::post('/auth/avatar', [ProfileController::class, 'setAvatar'])->middleware('throttle:20,1');
         Route::delete('/auth/avatar', [ProfileController::class, 'removeAvatar'])->middleware('throttle:20,1');
@@ -97,7 +106,7 @@ Route::prefix('v1')->group(function () {
         Route::get('/tickets-similar', [TicketInsightsController::class, 'openMatches'])->middleware('throttle:30,1');
         Route::get('/me/sla', [CustomerSlaController::class, 'show']);
         Route::get('/tickets', [TicketController::class, 'index']);
-        Route::post('/tickets', [TicketController::class, 'store']);
+        Route::post('/tickets', [TicketController::class, 'store'])->middleware('throttle:ticket-create');
         Route::get('/tickets/{ticket}', [TicketController::class, 'show']);
         Route::patch('/tickets/{ticket}/status', [TicketController::class, 'updateStatus']);
         Route::post('/tickets/{ticket}/presence', [TicketController::class, 'pingPresence']);
@@ -127,7 +136,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/attachments/sign', [AttachmentController::class, 'sign'])->middleware('throttle:60,1');
 
         // Messages & Collaboration
-        Route::post('/tickets/{ticket}/messages', [TicketMessageController::class, 'store']);
+        Route::post('/tickets/{ticket}/messages', [TicketMessageController::class, 'store'])->middleware('throttle:message-create');
 
         // Staff-only Operations (Agent, Lead, Admin)
         Route::middleware('role:agent,lead,admin')->group(function () {
@@ -144,6 +153,9 @@ Route::prefix('v1')->group(function () {
             Route::post('/tickets/{ticket}/ai/triage/accept', [TicketInsightsController::class, 'acceptTriage']);
             Route::post('/tickets/{ticket}/ai/triage/dismiss', [TicketInsightsController::class, 'dismissTriage']);
             Route::get('/tickets/{ticket}/similar', [TicketInsightsController::class, 'similar']);
+            Route::get('/tickets/{ticket}/time', [TimeEntryController::class, 'index']);
+            Route::post('/tickets/{ticket}/time', [TimeEntryController::class, 'store']);
+            Route::delete('/tickets/{ticket}/time/{entry}', [TimeEntryController::class, 'destroy']);
             Route::post('/tickets/{ticket}/watch', [TicketCollaborationController::class, 'watch']);
             Route::delete('/tickets/{ticket}/watch', [TicketCollaborationController::class, 'unwatch']);
             Route::get('/tickets/{ticket}/mentionable', [TicketCollaborationController::class, 'mentionable']);
@@ -182,7 +194,7 @@ Route::prefix('v1')->group(function () {
         });
 
         // Admin only
-        Route::middleware('role:admin')->group(function () {
+        Route::middleware(['role:admin', 'admin-audit'])->group(function () {
             Route::get('/organizations', [OrganizationController::class, 'index']);
             Route::post('/organizations', [OrganizationController::class, 'store']);
             Route::patch('/organizations/{organization}', [OrganizationController::class, 'update']);
@@ -190,6 +202,18 @@ Route::prefix('v1')->group(function () {
             Route::post('/organizations/{organization}/attach-customers', [OrganizationController::class, 'attachCustomers']);
             Route::get('/organizations/{organization}/customers', [OrganizationController::class, 'customers']);
             Route::patch('/organizations/{organization}/customers/{user}', [OrganizationController::class, 'setCompanyAdmin']);
+            Route::get('/usage', UsageController::class);
+            Route::get('/settings/email-channel', [WorkspaceSettingsController::class, 'emailChannel']);
+            Route::post('/settings/email-channel/enable', [WorkspaceSettingsController::class, 'enableEmailChannel']);
+            Route::delete('/settings/email-channel', [WorkspaceSettingsController::class, 'disableEmailChannel']);
+            Route::patch('/settings/email-channel', [WorkspaceSettingsController::class, 'updateEmailChannel']);
+            Route::get('/settings/security', [WorkspaceSettingsController::class, 'security']);
+            Route::patch('/settings/security', [WorkspaceSettingsController::class, 'updateSecurity']);
+            Route::get('/settings/branding', [WorkspaceSettingsController::class, 'branding']);
+            Route::patch('/settings/branding', [WorkspaceSettingsController::class, 'updateBranding']);
+            Route::post('/settings/branding/logo/sign', [WorkspaceSettingsController::class, 'signLogo'])->middleware('throttle:20,1');
+            Route::post('/settings/branding/logo', [WorkspaceSettingsController::class, 'setLogo'])->middleware('throttle:20,1');
+            Route::delete('/settings/branding/logo', [WorkspaceSettingsController::class, 'removeLogo']);
             Route::get('/webhooks', [WebhookController::class, 'index']);
             Route::post('/webhooks', [WebhookController::class, 'store']);
             Route::patch('/webhooks/{webhook}', [WebhookController::class, 'update']);
@@ -202,6 +226,8 @@ Route::prefix('v1')->group(function () {
             Route::delete('/automation-rules/{rule}', [AutomationRuleController::class, 'destroy']);
             Route::get('/automation-rules/{rule}/runs', [AutomationRuleController::class, 'runs']);
             Route::get('/audits', [ReportController::class, 'audits']);
+            Route::get('/admin-activity', [WorkspaceSettingsController::class, 'activity']);
+            Route::get('/settings/export', [WorkspaceSettingsController::class, 'export'])->middleware('throttle:3,60');
             Route::get('/ai/settings', [AiSettingsController::class, 'show']);
             Route::patch('/ai/settings', [AiSettingsController::class, 'update']);
             Route::patch('/users/{user}', [UserController::class, 'update']);
@@ -216,5 +242,6 @@ Route::prefix('v1')->group(function () {
             Route::post('/sla-policies', [SlaAnalyticsController::class, 'storePolicy']);
             Route::post('/users', [UserController::class, 'store']);
         });
+    });
     });
 });

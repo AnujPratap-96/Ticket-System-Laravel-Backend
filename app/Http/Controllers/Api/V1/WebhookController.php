@@ -27,6 +27,7 @@ class WebhookController extends Controller
     public function store(Request $request): JsonResponse
     {
         $data = $this->validated($request, true);
+        abort_if(WebhookEndpoint::count() >= (int) config('plans.global.webhooks'), 422, 'You can have at most '.config('plans.global.webhooks').' integrations. Delete one you no longer use.');
         $w = WebhookEndpoint::create($data + ['created_by' => $request->user()->id, 'secret' => $data['type'] === 'generic' ? Str::random(40) : null]);
 
         // The signing secret is shown exactly once, here.

@@ -39,6 +39,11 @@ class SlaBreachWarningJob implements ShouldQueue
             return;
         }
 
+        \App\Tenancy\TenantContext::run($deadline->ticket->tenant, fn () => $this->warn($deadline, $audit, $notifier));
+    }
+
+    private function warn(TicketSlaDeadline $deadline, AuditLoggerService $audit, TicketNotifier $notifier): void
+    {
         $deadline->update(['warning_sent_at' => now()]);
 
         $audit->log(

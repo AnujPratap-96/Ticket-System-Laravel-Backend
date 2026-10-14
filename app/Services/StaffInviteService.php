@@ -36,6 +36,7 @@ class StaffInviteService
             invitedBy: $invitedBy?->name,
             token: $token,
             days: self::TTL_DAYS,
+            tenant: $user->tenant,
         ));
     }
 

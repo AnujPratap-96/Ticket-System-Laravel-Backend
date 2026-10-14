@@ -13,7 +13,12 @@ class RunIdleAutomations extends Command
 
     public function handle(AutomationEngine $engine): int
     {
-        $this->info('Tickets changed: '.$engine->runIdle());
+        // each workspace has its own rules and tickets
+        $changed = 0;
+        \App\Tenancy\TenantContext::eachTenant(function () use ($engine, &$changed) {
+            $changed += $engine->runIdle();
+        });
+        $this->info('Tickets changed: '.$changed);
 
         return self::SUCCESS;
     }

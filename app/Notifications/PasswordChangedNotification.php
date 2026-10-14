@@ -25,11 +25,12 @@ class PasswordChangedNotification extends Notification implements ShouldQueue
 
     public function toMail(object $notifiable): MailMessage
     {
-        return $this->branded('Your DeskFlow password was changed', 'emails.password-changed', [
+        $this->forNotifiable($notifiable);
+        return $this->branded('Your '.$this->brandName().' password was changed', 'emails.password-changed', [
             'name' => Str::of($notifiable->name)->before(' ')->toString() ?: $notifiable->name,
             'device' => $this->device,
             'when' => now()->utc()->format('j M Y, H:i').' UTC',
-            'resetUrl' => rtrim(config('app.frontend_url'), '/').'/forgot-password',
+            'resetUrl' => $notifiable->tenant?->url('/forgot-password') ?? rtrim(config('app.frontend_url'), '/').'/forgot-password',
         ]);
     }
 }

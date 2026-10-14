@@ -18,6 +18,7 @@ class AutomationRuleController extends Controller
 
     public function store(AutomationRuleRequest $request): JsonResponse
     {
+        abort_if(AutomationRule::count() >= (int) config('plans.global.automation_rules'), 422, 'You can have at most '.config('plans.global.automation_rules').' automation rules. Delete one you no longer use.');
         $rule = AutomationRule::create($this->payload($request) + ['created_by' => $request->user()->id, 'is_active' => $request->boolean('is_active', true)]);
 
         return response()->json(['message' => 'Rule created', 'rule' => $rule], 201);

@@ -73,7 +73,7 @@ class ArticleSearchService
             return collect();
         }
 
-        $ids = Cache::remember('kb:semantic:'.md5(mb_strtolower($query)), 3600, function () use ($ai, $query, $limit) {
+        $ids = Cache::remember('kb:semantic:'.(\App\Tenancy\TenantContext::id() ?? 0).':'.md5(mb_strtolower($query)), 3600, function () use ($ai, $query, $limit) {
             $articles = Article::where('is_published', true)->orderByDesc('views')->limit(40)->get(['id', 'title', 'summary']);
             if ($articles->isEmpty()) {
                 return [];

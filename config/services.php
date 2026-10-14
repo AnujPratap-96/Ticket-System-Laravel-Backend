@@ -24,6 +24,11 @@ return [
     ],
 
     // OpenAI-compatible chat API. Defaults to Groq; any compatible provider works by changing the URL/model.
+    'otp' => [
+        // false = send the code email immediately (faster to see locally); true = through the queue worker (production).
+        'queue' => (bool) env('QUEUE_OTP', false),
+    ],
+
     'webpush' => [
         'public_key' => env('VAPID_PUBLIC_KEY'),
         'private_key' => env('VAPID_PRIVATE_KEY'),
@@ -51,13 +56,6 @@ return [
         'secret' => env('CRON_SECRET'),
     ],
 
-    'inbound_email' => [
-        // Shared secret the mail provider sends in the X-Webhook-Secret header (or ?secret=).
-        'secret' => env('INBOUND_EMAIL_SECRET'),
-        // Where brand-new emails from known customers are filed (department slug).
-        'default_department' => env('INBOUND_EMAIL_DEFAULT_DEPARTMENT'),
-    ],
-
     'postmark' => [
         'token' => env('POSTMARK_TOKEN'),
     ],
@@ -79,4 +77,7 @@ return [
         ],
     ],
 
+
+    // Slack/Teams-style incoming webhook that receives a message when the health check fails.
+    'ops_alert_webhook' => env('OPS_ALERT_WEBHOOK'),
 ];

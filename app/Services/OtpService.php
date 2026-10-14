@@ -73,7 +73,7 @@ class OtpService
         ], now()->addMinutes(self::TTL_MINUTES));
 
         $notification = new OtpNotification($purpose, $code, self::TTL_MINUTES);
-        if (env('QUEUE_OTP', false)) {
+        if (config('services.otp.queue')) {
             Notification::route('mail', $email)->notify($notification);
         } else {
             Notification::route('mail', $email)->notifyNow($notification);
@@ -89,6 +89,6 @@ class OtpService
 
     private function key(string $purpose, string $email): string
     {
-        return "otp:{$purpose}:".hash('sha256', strtolower($email));
+        return "otp:{$purpose}:".(\App\Tenancy\TenantContext::id() ?? 0).':'.hash('sha256', strtolower($email));
     }
 }

@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Tenancy\BelongsToTenant;
 use App\Enums\SlaTier;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
@@ -9,6 +10,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Organization extends Model
 {
+    use BelongsToTenant;
+
     use HasFactory;
 
     protected $fillable = [
@@ -16,6 +19,9 @@ class Organization extends Model
         'domain',
         'sla_tier',
         'is_active',
+        'monthly_ticket_limit',
+        'max_customers',
+        'max_open_per_customer',
     ];
 
     protected $casts = [

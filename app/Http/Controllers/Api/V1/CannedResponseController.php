@@ -33,6 +33,7 @@ class CannedResponseController extends Controller
         $user = $request->user();
         $data = $this->validated($request);
         $scope = $this->scope($request, $user);
+        abort_if(CannedResponse::where('owner_id', $user->id)->count() >= (int) config('plans.global.canned_responses_per_user'), 422, 'You can keep up to '.config('plans.global.canned_responses_per_user').' saved replies. Delete one first.');
 
         $row = CannedResponse::create($data + $scope);
 

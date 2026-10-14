@@ -33,11 +33,12 @@ class TicketUnassignedEscalation extends Notification
 
     public function toMail(object $notifiable): MailMessage
     {
+        $this->forNotifiable($notifiable);
         return $this->branded("Unassigned ticket {$this->ticket->ticket_number}", 'emails.unassigned', [
             'name' => Str::of($notifiable->name)->before(' ')->toString() ?: $notifiable->name,
             'number' => $this->ticket->ticket_number,
             'subject' => MarkdownSafe::escape($this->ticket->title, 120),
-            'url' => rtrim(config('app.frontend_url'), '/')."/staff/tickets/{$this->ticket->id}",
+            'url' => $this->ticket->tenant?->url("/staff/tickets/{$this->ticket->id}") ?? rtrim(config('app.frontend_url'), '/')."/staff/tickets/{$this->ticket->id}",
         ]);
     }
 }

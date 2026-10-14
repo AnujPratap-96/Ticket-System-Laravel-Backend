@@ -23,11 +23,12 @@ class InboundEmailTest extends TestCase
     protected function setUp(): void
     {
         parent::setUp();
-        config(['services.inbound_email.secret' => 's3cret', 'services.inbound_email.default_department' => 'infra']);
         $this->org = Organization::create(['name' => 'Acme', 'domain' => 'acme.test', 'sla_tier' => 'gold', 'is_active' => true]);
         $this->dept = Department::create(['name' => 'Infra', 'slug' => 'infra', 'business_hours_start' => '09:00:00', 'business_hours_end' => '18:00:00', 'timezone' => 'UTC']);
         $this->customer = User::factory()->create(['role' => 'customer', 'organization_id' => $this->org->id, 'email' => 'rahul@acme.test']);
         $this->agent = User::factory()->create(['role' => 'agent', 'department_id' => $this->dept->id]);
+        // this workspace's own mail channel
+        \App\Models\Tenant::where('slug', 'default')->first()->update(['inbound_secret' => 's3cret', 'inbound_department_id' => $this->dept->id]);
     }
 
     private function inbound(array $payload, string $secret = 's3cret')
@@ -50,7 +51,7 @@ class InboundEmailTest extends TestCase
     {
         $this->inbound(['From' => 'rahul@acme.test', 'Subject' => 'x', 'TextBody' => 'y'], 'wrong')->assertStatus(401);
 
-        config(['services.inbound_email.secret' => '']);
+        \App\Models\Tenant::where('slug', 'default')->first()->update(['inbound_secret' => null]);
         $this->inbound(['From' => 'rahul@acme.test', 'Subject' => 'x', 'TextBody' => 'y'], '')->assertStatus(503);
     }
 

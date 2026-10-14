@@ -13,6 +13,7 @@ class UserResource extends JsonResource
             'id' => $this->id,
             'name' => $this->name,
             'job_title' => $this->job_title,
+            'tenant' => $this->whenLoaded('tenant', fn () => $this->tenant ? ['id' => $this->tenant->id, 'name' => $this->tenant->name, 'slug' => $this->tenant->slug, 'brand_color' => $this->tenant->brand_color, 'logo_url' => \App\Support\Brand::for($this->tenant)['logo_url']] : null),
             'email' => $this->email,
             'role' => is_string($this->role) ? $this->role : $this->role->value,
             'avatar_url' => $this->avatar_public_id && app(\App\Services\CloudinaryService::class)->enabled()
@@ -21,6 +22,7 @@ class UserResource extends JsonResource
             'organization_id' => $this->organization_id,
             'department_id' => $this->department_id,
             'is_available_for_routing' => (bool) $this->is_available_for_routing,
+            'away_until' => $this->away_until?->toISOString(),
             'max_active_tickets' => (int) $this->max_active_tickets,
             'is_active' => (bool) ($this->is_active ?? true),
             // For the admin's team list: has this person accepted their email invitation yet?

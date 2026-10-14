@@ -1,0 +1,18 @@
+# Single-service Blueprint (no paid worker or cron): the web container also runs the queue worker and the scheduler.
+# The free plan sleeps when idle, so keep it awake with an external ping of /up every 5-10 minutes, otherwise
+# queued emails and SLA checks pause while it sleeps. Same env group as render.yaml (docs/RENDER_DEPLOY.md, section 4).
+
+services:
+  - type: web
+    name: deskflow-api
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    plan: free
+    healthCheckPath: /up
+    envVars:
+      - fromGroup: deskflow-shared
+      - { key: CONTAINER_ROLE, value: web }
+      - { key: RUN_WORKER_IN_WEB, value: "true" }
+      - { key: RUN_SCHEDULER_IN_WEB, value: "true" }
+      - { key: RUN_MIGRATIONS, value: "true" }       # Pre-Deploy Commands are not available on the free plan

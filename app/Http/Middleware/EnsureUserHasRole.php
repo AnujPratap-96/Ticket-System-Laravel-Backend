@@ -22,7 +22,13 @@ class EnsureUserHasRole
 
         $userRole = is_string($user->role) ? $user->role : $user->role->value;
 
-        // Admin has superuser access to all routes
+        // Platform routes (role:super_admin) are for the platform owner ONLY. A workspace's admin is the top of their own
+        // workspace, never of the platform.
+        if (in_array('super_admin', $roles, true)) {
+            return $userRole === 'super_admin' ? $next($request) : response()->json(['message' => 'Forbidden. This area is for the platform owner.', 'current_role' => $userRole], 403);
+        }
+
+        // A workspace admin may use every workspace route; the platform owner may not use any of them.
         if ($userRole === 'admin' || in_array($userRole, $roles, true)) {
             return $next($request);
         }

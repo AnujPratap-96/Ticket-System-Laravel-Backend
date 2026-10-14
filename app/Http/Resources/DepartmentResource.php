@@ -18,6 +18,7 @@ class DepartmentResource extends JsonResource
             'business_hours_end' => $this->business_hours_end,
             'timezone' => $this->timezone,
             'form_fields' => $this->form_fields ?? [],
+            'working_days' => $this->workingDays(),
         ];
     }
 }
