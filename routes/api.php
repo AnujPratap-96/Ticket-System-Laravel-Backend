@@ -117,7 +117,7 @@ Route::prefix('v1')->group(function () {
         Route::post('/2fa/disable', [TwoFactorController::class, 'disable']);
 
         // Privacy (GDPR): export my data / erase my account
-        Route::get('/me/export', [PrivacyController::class, 'export']);
+        Route::get('/me/export', [PrivacyController::class, 'export'])->middleware('throttle:5,60');
         Route::delete('/me', [PrivacyController::class, 'erase']);
 
         // Customer satisfaction
@@ -173,11 +173,11 @@ Route::prefix('v1')->group(function () {
         Route::get('/tickets/{ticket}/audits', [TicketController::class, 'audits']);
 
         // Lead & Admin Analytics
-        Route::middleware('role:lead,admin')->group(function () {
+        Route::middleware(['role:lead,admin', 'throttle:60,1'])->group(function () {
             Route::get('/analytics/sla-overview', [SlaAnalyticsController::class, 'overview']);
             Route::get('/analytics/satisfaction', [SatisfactionController::class, 'index']);
             Route::get('/analytics/trends', [ReportController::class, 'trends']);
-            Route::get('/tickets-export', [ReportController::class, 'exportTickets']);
+            Route::get('/tickets-export', [ReportController::class, 'exportTickets'])->withoutMiddleware('throttle:60,1')->middleware('throttle:10,60');
             Route::get('/analytics/agent-workload', [SlaAnalyticsController::class, 'agentWorkload']);
             Route::get('/sla-policies', [SlaAnalyticsController::class, 'policies']);
         });

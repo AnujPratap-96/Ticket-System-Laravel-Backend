@@ -52,7 +52,8 @@ class OtpService
 
         if (! Hash::check($code, $pending['otp_hash'])) {
             $pending['attempts']++;
-            Cache::put($key, $pending, now()->addMinutes(self::TTL_MINUTES));
+            $remainingSeconds = max(1, ($pending['expires_at'] ?? now()->addMinutes(self::TTL_MINUTES)->timestamp) - now()->timestamp);
+            Cache::put($key, $pending, now()->addSeconds($remainingSeconds));
             abort(422, 'Invalid verification code.');
         }
 
@@ -64,13 +65,15 @@ class OtpService
     private function issue(string $purpose, string $email, array $payload): void
     {
         $code = str_pad((string) random_int(0, 999999), 6, '0', STR_PAD_LEFT);
+        $expiresAt = now()->addMinutes(self::TTL_MINUTES);
 
         Cache::put($this->key($purpose, $email), [
             'payload' => $payload,
             'otp_hash' => Hash::make($code),
             'attempts' => 0,
             'sent_at' => now()->timestamp,
-        ], now()->addMinutes(self::TTL_MINUTES));
+            'expires_at' => $expiresAt->timestamp,
+        ], $expiresAt);
 
         $notification = new OtpNotification($purpose, $code, self::TTL_MINUTES);
         if (config('services.otp.queue')) {

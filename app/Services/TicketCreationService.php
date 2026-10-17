@@ -52,7 +52,7 @@ class TicketCreationService
                 'custom_fields' => ($data['custom_fields'] ?? []) ?: null,
                 'status' => TicketStatus::OPEN,
                 'priority' => ! empty($data['priority']) ? TicketPriority::from($data['priority']) : TicketPriority::MEDIUM,
-                'channel' => ! empty($data['channel']) ? TicketChannel::from($data['channel']) : TicketChannel::PORTAL,
+                'channel' => ($actorIsStaff && ! empty($data['channel'])) ? (TicketChannel::tryFrom($data['channel']) ?? TicketChannel::PORTAL) : TicketChannel::PORTAL,
             ]);
 
             // Sequential, human-friendly number derived from the unique primary key.

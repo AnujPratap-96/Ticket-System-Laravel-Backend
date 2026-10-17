@@ -72,7 +72,7 @@ class TicketStateMachineService
                 $this->sla->fulfill($locked, SlaMetricType::RESOLUTION);
             }
 
-            if ($newStatus === TicketStatus::IN_PROGRESS
+            if (in_array($newStatus, [TicketStatus::OPEN, TicketStatus::IN_PROGRESS], true)
                 && in_array($currentStatus, [TicketStatus::RESOLVED, TicketStatus::CLOSED], true)) {
                 $locked->resolved_at = null;
                 $locked->closed_at = null;

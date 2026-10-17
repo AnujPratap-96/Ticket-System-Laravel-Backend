@@ -69,25 +69,31 @@ class AuthController extends Controller
         $email = strtolower($request->email);
         $pending = $this->otp->verify('registration', $email, $request->code);
 
-        if (User::where('email', $email)->exists()) {
-            abort(422, 'This email is already registered.');
-        }
+        $user = DB::transaction(function () use ($email, $pending) {
+            if (User::where('email', $email)->lockForUpdate()->exists()) {
+                abort(422, 'This email is already registered.');
+            }
 
-        $this->assertSeatFor($email);   // the company may have filled up while the code was in the mailbox
+            $domain = substr(strrchr($email, '@'), 1);
+            $organization = Organization::where('domain', $domain)->where('is_active', true)->lockForUpdate()->first();
 
-        $domain = substr(strrchr($email, '@'), 1);
-        $organization = Organization::where('domain', $domain)->where('is_active', true)->first();
+            if ($organization && ! $this->limits->hasSeatFor($organization)) {
+                throw new QuotaExceededException("{$organization->name} has reached the number of user accounts its plan allows. Ask your company's administrator to add you or to raise the limit.", 'customers');
+            }
 
-        $user = new User([
-            'name' => $pending['name'],
-            'email' => $email,
-            'role' => UserRole::CUSTOMER,
-            'organization_id' => $organization?->id,
-            'email_verified_at' => now(),
-        ]);
-        // Already hashed; bypass the "hashed" cast re-hash by setting the raw attribute.
-        $user->setRawAttributes(array_merge($user->getAttributes(), ['password' => $pending['password_hash']]));
-        $user->save();
+            $user = new User([
+                'name' => $pending['name'],
+                'email' => $email,
+                'role' => UserRole::CUSTOMER,
+                'organization_id' => $organization?->id,
+                'email_verified_at' => now(),
+            ]);
+            // Already hashed; bypass the "hashed" cast re-hash by setting the raw attribute.
+            $user->setRawAttributes(array_merge($user->getAttributes(), ['password' => $pending['password_hash']]));
+            $user->save();
+
+            return $user;
+        });
 
         return response()->json([
             'message' => 'Email verified. Account created.',

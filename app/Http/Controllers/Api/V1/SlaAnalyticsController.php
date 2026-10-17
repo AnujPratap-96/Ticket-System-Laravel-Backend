@@ -36,7 +36,8 @@ class SlaAnalyticsController extends Controller
         $breached = (int) $row->breached;
         $fulfilledOnTime = (int) $row->on_time;
         $atRisk = (int) $row->at_risk;
-        $compliance = $total > 0 ? round(($fulfilledOnTime / $total) * 100, 2) : 100.00;
+        $evaluated = $fulfilledOnTime + $breached;
+        $compliance = $evaluated > 0 ? round(($fulfilledOnTime / $evaluated) * 100, 2) : 100.00;
 
         $byStatus = Ticket::query()->when($scope, fn ($q) => $q->where('department_id', $scope))
             ->whereIn('status', [TicketStatus::OPEN->value, TicketStatus::IN_PROGRESS->value, TicketStatus::RESOLVED->value])

@@ -68,7 +68,14 @@ class InboundEmailService
 
     private function reply(User $customer, string $number, string $body): array
     {
-        $ticket = Ticket::where('ticket_number', $number)->where('customer_id', $customer->id)->first();
+        $ticket = Ticket::where('ticket_number', $number)
+            ->where(function ($q) use ($customer) {
+                $q->where('customer_id', $customer->id);
+                if ($customer->is_org_admin && $customer->organization_id !== null) {
+                    $q->orWhere('organization_id', $customer->organization_id);
+                }
+            })
+            ->first();
 
         if (! $ticket) {
             return ['result' => 'ticket_not_found'];
@@ -114,7 +121,7 @@ class InboundEmailService
                 'title' => $title,
                 'description' => $body,
                 'channel' => 'email',
-            ]);
+            ], null, true);
         } catch (\App\Exceptions\QuotaExceededException $e) {
             // Over the plan's limit: no ticket. (The sender is not auto-replied, so this cannot be used for backscatter.)
             return ['result' => 'quota_exceeded'];
