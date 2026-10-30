@@ -62,6 +62,28 @@ class DatabaseSeeder extends Seeder
                     'tenant_id' => null, 'name' => 'Platform Owner', 'email' => 'platform@deskflow.com', 'role' => UserRole::SUPER_ADMIN,
                     'password' => Hash::make($this->demoPassword()), 'email_verified_at' => now(), 'is_active' => true, 'is_available_for_routing' => false,
                 ]);
+
+            // Platform Owner / Super Admin
+            $officialAdmin = User::withoutGlobalScopes()->where('email', 'officialthakur94@gmail.com')->first();
+            if ($officialAdmin) {
+                $officialAdmin->update([
+                    'tenant_id' => null,
+                    'role' => UserRole::SUPER_ADMIN,
+                    'is_active' => true,
+                    'email_verified_at' => $officialAdmin->email_verified_at ?? now(),
+                ]);
+            } else {
+                User::forceCreate([
+                    'tenant_id' => null,
+                    'name' => 'Official Thakur (Platform Admin)',
+                    'email' => 'officialthakur94@gmail.com',
+                    'role' => UserRole::SUPER_ADMIN,
+                    'password' => Hash::make($this->demoPassword()),
+                    'email_verified_at' => now(),
+                    'is_active' => true,
+                    'is_available_for_routing' => false,
+                ]);
+            }
         });
     }
 
@@ -203,6 +225,26 @@ class DatabaseSeeder extends Seeder
                 'is_available_for_routing' => false,
             ]
         );
+
+        $thakurAdmin = User::withoutGlobalScopes()->where('email', 'thakurajsingh9@gmail.com')->first();
+        if ($thakurAdmin) {
+            $thakurAdmin->update([
+                'tenant_id' => TenantContext::id(),
+                'role' => UserRole::ADMIN,
+                'is_active' => true,
+                'email_verified_at' => $thakurAdmin->email_verified_at ?? now(),
+            ]);
+        } else {
+            User::create([
+                'name' => 'Thakur Aj Singh (TechCorp Admin)',
+                'email' => 'thakurajsingh9@gmail.com',
+                'password' => Hash::make($this->demoPassword()),
+                'email_verified_at' => now(),
+                'role' => UserRole::ADMIN,
+                'is_available_for_routing' => false,
+                'is_active' => true,
+            ]);
+        }
 
         $lead = User::firstOrCreate(
             ['email' => 'lead@deskflow.com'],
