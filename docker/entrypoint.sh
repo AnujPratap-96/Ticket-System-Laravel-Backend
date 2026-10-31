@@ -30,6 +30,10 @@ case "$ROLE" in
     if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
       echo "Running migrations..."
       as_app php artisan migrate --force --isolated
+      if [ "${RUN_SEEDERS:-false}" = "true" ]; then
+        echo "Running seeders..."
+        as_app php artisan db:seed --force
+      fi
     fi
     warm_caches
 

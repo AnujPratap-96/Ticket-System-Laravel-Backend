@@ -19,6 +19,7 @@ services:
       CONTAINER_ROLE: web
       PORT: "10000"
       RUN_MIGRATIONS: "true"          # only the web container migrates
+      RUN_SEEDERS: "true"             # bootstrap demo data & admins
     ports: ["8000:10000"]
 
   worker:
