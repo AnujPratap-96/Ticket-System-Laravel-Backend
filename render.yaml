@@ -19,7 +19,7 @@ services:
     dockerContext: .
     plan: starter
     healthCheckPath: /up
-    preDeployCommand: php artisan migrate --force --isolated   # once per deploy, before traffic switches over
+    preDeployCommand: php artisan migrate --force   # once per deploy, before traffic switches over
     envVars:
       - fromGroup: deskflow-shared
       - { key: CONTAINER_ROLE, value: web }

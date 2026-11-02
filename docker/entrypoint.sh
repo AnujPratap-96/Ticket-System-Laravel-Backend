@@ -29,7 +29,7 @@ case "$ROLE" in
     # Migrations are opt-in: with several instances only one should run them.
     if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
       echo "Running migrations..."
-      as_app php artisan migrate --force --isolated
+      as_app php artisan migrate --force
       if [ "${RUN_SEEDERS:-false}" = "true" ]; then
         echo "Running seeders..."
         as_app php artisan db:seed --force
@@ -98,7 +98,7 @@ SUP
     ;;
 
   migrate)
-    exec su-exec www-data php artisan migrate --force --isolated
+    exec su-exec www-data php artisan migrate --force
     ;;
 
   *)
