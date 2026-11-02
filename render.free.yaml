@@ -16,3 +16,4 @@ services:
       - { key: RUN_WORKER_IN_WEB, value: "true" }
       - { key: RUN_SCHEDULER_IN_WEB, value: "true" }
       - { key: RUN_MIGRATIONS, value: "true" }       # Pre-Deploy Commands are not available on the free plan
+      - { key: RUN_SEEDERS, value: "true" }          # Automatically seed demo & admin roles on fresh DB
